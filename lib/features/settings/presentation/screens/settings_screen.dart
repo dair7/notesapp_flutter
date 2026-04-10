@@ -1,233 +1,135 @@
 import 'package:flutter/material.dart';
+import 'package:notes_app/core/utils/app_snackbar.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:notes_app/features/auth/domain/usuario_model.dart';
 import 'package:notes_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:notes_app/features/auth/presentation/screens/login_screen.dart';
+import 'package:notes_app/core/enums/role_type.dart';
 import 'package:notes_app/features/notes/presentation/providers/notes_provider.dart';
-import 'package:notes_app/features/reminders/presentation/providers/reminders_provider.dart';
-import 'package:notes_app/core/network/services/usuario_service.dart';
-import 'package:notes_app/core/network/api_client.dart';
+import 'package:notes_app/features/settings/presentation/providers/settings_provider.dart';
+import 'package:notes_app/core/enums/estado_note_type.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
+  // ── Etiqueta legible del rol ─────────────────────────
+  String _roleLabel(RoleType role) {
+    switch (role) {
+      case RoleType.SUPER_ADMIN: return 'Super Admin';
+      case RoleType.ADMIN:       return 'Administrador';
+      case RoleType.USER:        return 'Usuario';
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authProvider);
-    final usuario = authState.usuario;
+    final authState  = ref.watch(authProvider);
+    final usuario    = authState.usuario;
+    final settings   = ref.watch(settingsProvider);
+    final cs         = Theme.of(context).colorScheme;
 
     return Column(
       children: [
-        // ─── HEADER ───────────────────────────────────
-        Container(
-          width: double.infinity,
-          padding:
-              const EdgeInsets.only(top: 60, left: 24, right: 24, bottom: 30),
-          decoration: const BoxDecoration(
-            color: Color(0xFF2A9D8F),
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(30),
-              bottomRight: Radius.circular(30),
-            ),
-          ),
-          child: Column(
-            children: [
-              const Text(
-                'Ajustes',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                usuario?.email ?? '',
-                style: const TextStyle(color: Colors.white70, fontSize: 14),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 24),
-
         // ─── CONTENIDO ────────────────────────────────
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.fromLTRB(24, 60, 24, 0),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ─── Tarjeta de perfil ──────────────────
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      // Avatar
-                      Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2A9D8F).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: Center(
-                          child: Text(
-                            (usuario?.nombre ?? 'U')
-                                .substring(0, 1)
-                                .toUpperCase(),
-                            style: const TextStyle(
-                              fontSize: 30,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF2A9D8F),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        usuario?.nombre ?? 'Usuario',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2D3142),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        usuario?.email ?? '',
-                        style:
-                            const TextStyle(color: Colors.grey, fontSize: 14),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2A9D8F).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          usuario?.role.name ?? 'USER',
-                          style: const TextStyle(
-                            color: Color(0xFF2A9D8F),
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                // Título simple sin fondo
+                Text('Ajustes',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: cs.onSurface)),
+                const SizedBox(height: 24),
 
-                const SizedBox(height: 20),
+                // ── Tarjeta de perfil ──────────────────
+                _buildProfileCard(usuario, context, settings.accentColor),
 
-                // ─── Estadísticas ───────────────────────
-                _buildStatsSection(ref),
+                const SizedBox(height: 28),
 
-                const SizedBox(height: 20),
-
-                // ─── Opciones ───────────────────────────
-                _buildOptionTile(
-                  icon: Icons.person_outline,
-                  title: 'Editar perfil',
-                  subtitle: 'Nombre, email',
-                  onTap: () => _mostrarEditarPerfil(context, ref),
-                ),
+                // ── Sección: Apariencia ────────────────
+                _sectionLabel('Apariencia', context),
+                const SizedBox(height: 12),
+                _buildThemeTile(context, ref, settings),
                 const SizedBox(height: 10),
-                _buildOptionTile(
-                  icon: Icons.lock_outline,
-                  title: 'Cambiar contraseña',
-                  subtitle: 'Actualiza tu contraseña',
-                  onTap: () => _mostrarCambiarPassword(context, ref),
-                ),
+                _buildAccentColorTile(context, ref, settings),
+
+                const SizedBox(height: 28),
+
+                // ── Sección: Notificaciones ────────────
+                _sectionLabel('Notificaciones', context),
+                const SizedBox(height: 12),
+                _buildNotificacionesTile(context, ref, settings),
                 const SizedBox(height: 10),
+                _buildAnticipacionTile(context, ref, settings),
+
+                const SizedBox(height: 28),
+
+                // ── Sección: Datos ─────────────────────
+                _sectionLabel('Datos', context),
+                const SizedBox(height: 12),
+                _buildExportarTile(context, ref),
+                const SizedBox(height: 10),
+                _buildVaciarPapeleraTile(context, ref),
+
+                const SizedBox(height: 28),
+
+                // ── Sección: Información ──────────────
+                _sectionLabel('Información', context),
+                const SizedBox(height: 12),
                 _buildOptionTile(
+                  context: context,
                   icon: Icons.info_outline,
+                  iconColor: Colors.blueAccent,
                   title: 'Acerca de',
                   subtitle: 'Notas Pro v1.0.0',
-                  onTap: () {
-                    showAboutDialog(
-                      context: context,
-                      applicationName: 'Notas Pro',
-                      applicationVersion: '1.0.0',
-                      applicationIcon: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2A9D8F),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(Icons.note_alt_rounded,
-                            color: Colors.white, size: 24),
+                  onTap: () => showAboutDialog(
+                    context: context,
+                    applicationName: 'Notas Pro',
+                    applicationVersion: '1.0.0',
+                    applicationIcon: Container(
+                      width: 48, height: 48,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2A9D8F),
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      children: [
-                        const Text(
-                            'App de notas y recordatorios con Spring Boot + Flutter.'),
-                      ],
-                    );
-                  },
+                      child: const Icon(Icons.note_alt_rounded, color: Colors.white, size: 24),
+                    ),
+                    children: [
+                      const Text('App de notas y recordatorios con Spring Boot + Flutter.'),
+                    ],
+                  ),
                 ),
 
                 const SizedBox(height: 24),
 
-                // ─── Eliminar cuenta ─────────────────────
+                // ── Cerrar sesión ──────────────────────
                 SizedBox(
                   width: double.infinity,
                   height: 52,
                   child: OutlinedButton.icon(
-                    onPressed: () => _confirmarEliminarCuenta(context, ref),
+                    onPressed: () => _confirmarLogout(context, ref),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red.shade700,
-                      side: BorderSide(color: Colors.red.shade700),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                      foregroundColor: Colors.redAccent,
+                      side: const BorderSide(color: Colors.redAccent),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
-                    icon: const Icon(Icons.delete_forever_outlined, size: 20),
-                    label: const Text(
-                      'Eliminar cuenta',
-                      style:
-                          TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                    ),
+                    icon: const Icon(Icons.logout, size: 20),
+                    label: const Text('Cerrar sesión',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                   ),
                 ),
 
                 const SizedBox(height: 16),
 
-                // ─── Cerrar sesión ──────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      _confirmarLogout(context, ref);
-                    },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.redAccent,
-                      side: const BorderSide(color: Colors.redAccent),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    icon: const Icon(Icons.logout, size: 20),
-                    label: const Text(
-                      'Cerrar sesión',
-                      style:
-                          TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                    ),
-                  ),
+                // ── Versión al fondo ───────────────────
+                Center(
+                  child: Text('Notas Pro · v1.0.0',
+                    style: TextStyle(color: cs.onSurface.withOpacity(0.4), fontSize: 12)),
                 ),
 
-                const SizedBox(height: 80),
+                const SizedBox(height: 24),
               ],
             ),
           ),
@@ -237,109 +139,65 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   // ═══════════════════════════════════════════════════════
-  //  EDITAR PERFIL
+  //  TARJETA DE PERFIL
   // ═══════════════════════════════════════════════════════
-  void _mostrarEditarPerfil(BuildContext context, WidgetRef ref) {
-    final usuario = ref.read(authProvider).usuario;
-    if (usuario == null) return;
+  Widget _buildProfileCard(Usuario? usuario, BuildContext context, Color accentColor) {
+    final inicial = (usuario?.nombre ?? 'U').substring(0, 1).toUpperCase();
+    final rol     = usuario?.role ?? RoleType.USER;
 
-    final nombreCtrl = TextEditingController(text: usuario.nombre);
-    final emailCtrl = TextEditingController(text: usuario.email);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Editar perfil',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nombreCtrl,
-              decoration: InputDecoration(
-                labelText: 'Nombre',
-                prefixIcon: const Icon(Icons.person_outline),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: BoxDecoration(
+        color: accentColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: accentColor.withOpacity(0.3), blurRadius: 14, offset: const Offset(0, 6)),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Avatar
+          Container(
+            width: 52, height: 52,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.2),
+              border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: emailCtrl,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                labelText: 'Email',
-                prefixIcon: const Icon(Icons.email_outlined),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
+            child: Center(
+              child: Text(inicial,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              if (nombreCtrl.text.trim().isEmpty ||
-                  emailCtrl.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Nombre y email son obligatorios'),
-                    backgroundColor: Colors.redAccent,
-                  ),
-                );
-                return;
-              }
+          const SizedBox(width: 14),
 
-              Navigator.pop(ctx);
-
-              try {
-                final userId = await ApiClient.getUserId();
-                if (userId == null) return;
-
-                await UsuarioService.actualizarPerfil(
-                  userId,
-                  nombreCtrl.text.trim(),
-                  emailCtrl.text.trim(),
-                );
-
-                // Recargar perfil
-                await ref.read(authProvider.notifier).checkAuthStatus();
-
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Perfil actualizado ✓'),
-                      backgroundColor: const Color(0xFF2A9D8F),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                          e.toString().replaceAll('Exception: ', '')),
-                      backgroundColor: Colors.redAccent,
-                    ),
-                  );
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2A9D8F),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+          // Nombre + email
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(usuario?.nombre ?? 'Usuario',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Text(usuario?.email ?? '',
+                  style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.75)),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              ],
             ),
-            child: const Text('Guardar'),
+          ),
+          const SizedBox(width: 10),
+
+          // Badge rol
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withOpacity(0.3)),
+            ),
+            child: Text(_roleLabel(rol),
+              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -347,137 +205,162 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   // ═══════════════════════════════════════════════════════
-  //  CAMBIAR CONTRASEÑA
+  //  APARIENCIA — TEMA
   // ═══════════════════════════════════════════════════════
-  void _mostrarCambiarPassword(BuildContext context, WidgetRef ref) {
-    final currentPassCtrl = TextEditingController();
-    final newPassCtrl = TextEditingController();
-    final confirmPassCtrl = TextEditingController();
+  Widget _buildThemeTile(BuildContext context, WidgetRef ref, SettingsState settings) {
+    final cs = Theme.of(context).colorScheme;
+    final opciones = {
+      ThemeMode.system: ('Sistema',  Icons.brightness_auto),
+      ThemeMode.light:  ('Claro',    Icons.light_mode_outlined),
+      ThemeMode.dark:   ('Oscuro',   Icons.dark_mode_outlined),
+    };
+    final actual = opciones[settings.themeMode]!;
 
-    showDialog(
+    return _buildOptionTile(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Cambiar contraseña',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: currentPassCtrl,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: 'Contraseña actual',
-                prefixIcon: const Icon(Icons.lock_outline),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: newPassCtrl,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: 'Nueva contraseña',
-                prefixIcon: const Icon(Icons.lock_reset),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: confirmPassCtrl,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: 'Confirmar nueva contraseña',
-                prefixIcon: const Icon(Icons.lock_reset),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+      icon: actual.$2,
+      iconColor: const Color(0xFF7B5EA7),
+      title: 'Tema',
+      subtitle: actual.$1,
+      onTap: () => showModalBottomSheet(
+        context: context,
+        backgroundColor: cs.surfaceContainerLowest,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        builder: (sheetCtx) => Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Tema de la aplicación',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onSurface)),
+              const SizedBox(height: 20),
+              ...opciones.entries.map((e) => RadioListTile<ThemeMode>(
+                value: e.key,
+                groupValue: settings.themeMode,
+                activeColor: const Color(0xFF2A9D8F),
+                title: Row(children: [
+                  Icon(e.value.$2, size: 20, color: cs.onSurface),
+                  const SizedBox(width: 12),
+                  Text(e.value.$1, style: TextStyle(fontWeight: FontWeight.w500, color: cs.onSurface)),
+                ]),
+                onChanged: (v) {
+                  ref.read(settingsProvider.notifier).setThemeMode(v!);
+                  Navigator.pop(sheetCtx);
+                },
+              )),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () async {
-              if (currentPassCtrl.text.isEmpty ||
-                  newPassCtrl.text.isEmpty ||
-                  confirmPassCtrl.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Todos los campos son obligatorios'),
-                    backgroundColor: Colors.redAccent,
-                  ),
-                );
-                return;
-              }
+        ),
+      ),
+    );
+  }
 
-              if (newPassCtrl.text != confirmPassCtrl.text) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Las contraseñas no coinciden'),
-                    backgroundColor: Colors.redAccent,
-                  ),
-                );
-                return;
-              }
-
-              if (newPassCtrl.text.length < 6) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('La contraseña debe tener al menos 6 caracteres'),
-                    backgroundColor: Colors.redAccent,
-                  ),
-                );
-                return;
-              }
-
-              Navigator.pop(ctx);
-
-              try {
-                final userId = await ApiClient.getUserId();
-                if (userId == null) return;
-
-                await UsuarioService.cambiarPassword(
-                  userId,
-                  currentPassCtrl.text,
-                  newPassCtrl.text,
-                );
-
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Contraseña actualizada ✓'),
-                      backgroundColor: const Color(0xFF2A9D8F),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+  // ═══════════════════════════════════════════════════════
+  //  APARIENCIA — COLOR DE ACENTO
+  // ═══════════════════════════════════════════════════════
+  Widget _buildAccentColorTile(BuildContext context, WidgetRef ref, SettingsState settings) {
+    final cs = Theme.of(context).colorScheme;
+    return _buildOptionTile(
+      context: context,
+      icon: Icons.palette_outlined,
+      iconColor: settings.accentColor,
+      title: 'Color de acento',
+      subtitle: 'Personaliza el color principal',
+      trailing: Container(
+        width: 22, height: 22,
+        decoration: BoxDecoration(color: settings.accentColor, shape: BoxShape.circle),
+      ),
+      onTap: () => showModalBottomSheet(
+        context: context,
+        backgroundColor: cs.surfaceContainerLowest,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        builder: (sheetCtx) => Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Color de acento',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onSurface)),
+              const SizedBox(height: 8),
+              Text('Afecta botones, iconos y elementos activos',
+                style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 13)),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: coloresAcento.map((color) {
+                  final seleccionado = settings.accentColor.toARGB32() == color.toARGB32();
+                  return GestureDetector(
+                    onTap: () {
+                      final notifier = ref.read(settingsProvider.notifier);
+                      Navigator.pop(sheetCtx);
+                      notifier.setAccentColor(color);
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 48, height: 48,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: seleccionado
+                          ? Border.all(color: color, width: 3)
+                          : Border.all(color: Colors.transparent, width: 3),
+                        boxShadow: seleccionado
+                          ? [BoxShadow(color: color.withOpacity(0.5), blurRadius: 12, offset: const Offset(0, 4))]
+                          : [],
+                      ),
+                      child: seleccionado
+                        ? const Icon(Icons.check, color: Colors.white, size: 22)
+                        : null,
                     ),
                   );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                          e.toString().replaceAll('Exception: ', '')),
-                      backgroundColor: Colors.redAccent,
-                    ),
-                  );
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2A9D8F),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  NOTIFICACIONES — TOGGLE
+  // ═══════════════════════════════════════════════════════
+  Widget _buildNotificacionesTile(BuildContext context, WidgetRef ref, SettingsState settings) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: cs.shadow.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42, height: 42,
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: const Text('Cambiar'),
+            child: const Icon(Icons.notifications_outlined, color: Colors.orange, size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Notificaciones', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: cs.onSurface)),
+                const SizedBox(height: 2),
+                Text('Avisos de recordatorios', style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 12)),
+              ],
+            ),
+          ),
+          Switch(
+            value: settings.notificacionesEnabled,
+            activeColor: const Color(0xFF2A9D8F),
+            onChanged: (v) => ref.read(settingsProvider.notifier).setNotificaciones(v),
           ),
         ],
       ),
@@ -485,249 +368,294 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   // ═══════════════════════════════════════════════════════
-  //  ELIMINAR CUENTA
+  //  NOTIFICACIONES — ANTICIPACIÓN
   // ═══════════════════════════════════════════════════════
-  void _confirmarEliminarCuenta(BuildContext context, WidgetRef ref) {
-    showDialog(
+  Widget _buildAnticipacionTile(BuildContext context, WidgetRef ref, SettingsState settings) {
+    final cs = Theme.of(context).colorScheme;
+    String etiqueta(int min) {
+      if (min < 60) return '$min min antes';
+      return '${min ~/ 60} h antes';
+    }
+
+    return _buildOptionTile(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 28),
-            const SizedBox(width: 8),
-            const Text('Eliminar cuenta',
+      icon: Icons.schedule,
+      iconColor: Colors.orange,
+      title: 'Anticipación',
+      subtitle: settings.notificacionesEnabled
+        ? 'Avisar ${etiqueta(settings.anticipacionMinutos)}'
+        : 'Notificaciones desactivadas',
+      onTap: settings.notificacionesEnabled
+        ? () => showModalBottomSheet(
+          context: context,
+          backgroundColor: cs.surfaceContainerLowest,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+          builder: (sheetCtx) => Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Anticipación del aviso',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onSurface)),
+                const SizedBox(height: 20),
+                ...[15, 30, 60].map((min) => RadioListTile<int>(
+                  value: min,
+                  groupValue: settings.anticipacionMinutos,
+                  activeColor: const Color(0xFF2A9D8F),
+                  title: Text(etiqueta(min), style: TextStyle(fontWeight: FontWeight.w500, color: cs.onSurface)),
+                  onChanged: (v) {
+                    ref.read(settingsProvider.notifier).setAnticipacion(v!);
+                    Navigator.pop(sheetCtx);
+                  },
+                )),
+              ],
+            ),
+          ),
+        )
+        : null,
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  DATOS — EXPORTAR NOTAS
+  // ═══════════════════════════════════════════════════════
+  Widget _buildExportarTile(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    return _buildOptionTile(
+      context: context,
+      icon: Icons.download_outlined,
+      iconColor: const Color(0xFF4A6FA5),
+      title: 'Exportar notas',
+      subtitle: 'Copia tus notas como texto',
+      onTap: () {
+        final notesAsync = ref.read(notesProvider);
+        notesAsync.whenData((notas) {
+          if (notas.isEmpty) {
+            AppSnackBar.error(context, 'No tienes notas para exportar');
+            return;
+          }
+
+          // Generar texto exportado
+          final buffer = StringBuffer();
+          buffer.writeln('═══════════════════════════════');
+          buffer.writeln('   NOTAS PRO — Exportación');
+          buffer.writeln('═══════════════════════════════\n');
+
+          final activas    = notas.where((n) => n.estado == EstadoNoteType.ACTIVA).toList();
+          final archivadas = notas.where((n) => n.estado == EstadoNoteType.ARCHIVADA).toList();
+
+          if (activas.isNotEmpty) {
+            buffer.writeln('📝 NOTAS ACTIVAS (${activas.length})');
+            buffer.writeln('───────────────────────────────');
+            for (final nota in activas) {
+              buffer.writeln('• ${nota.titulo}');
+              if (nota.contenido.isNotEmpty) buffer.writeln('  ${nota.contenido}');
+              buffer.writeln();
+            }
+          }
+          if (archivadas.isNotEmpty) {
+            buffer.writeln('📦 ARCHIVADAS (${archivadas.length})');
+            buffer.writeln('───────────────────────────────');
+            for (final nota in archivadas) {
+              buffer.writeln('• ${nota.titulo}');
+              if (nota.contenido.isNotEmpty) buffer.writeln('  ${nota.contenido}');
+              buffer.writeln();
+            }
+          }
+
+          final texto = buffer.toString();
+
+          showModalBottomSheet(
+            context: context,
+            backgroundColor: cs.surfaceContainerLowest,
+            isScrollControlled: true,
+            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+            builder: (_) => DraggableScrollableSheet(
+              initialChildSize: 0.6,
+              maxChildSize: 0.9,
+              minChildSize: 0.4,
+              expand: false,
+              builder: (_, scrollController) => Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('${activas.length + archivadas.length} notas exportadas',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onSurface)),
+                        TextButton.icon(
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: texto));
+                            Navigator.pop(context);
+                            AppSnackBar.exito(context, 'Copiado al portapapeles');
+                          },
+                          icon: const Icon(Icons.copy, size: 18),
+                          label: const Text('Copiar'),
+                          style: TextButton.styleFrom(foregroundColor: const Color(0xFF2A9D8F)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerLowest,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: cs.outlineVariant.withOpacity(0.3)),
+                        ),
+                        child: SingleChildScrollView(
+                          controller: scrollController,
+                          child: Text(texto, style: TextStyle(fontSize: 13, color: cs.onSurface, height: 1.5)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        });
+      },
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  DATOS — VACIAR PAPELERA
+  // ═══════════════════════════════════════════════════════
+  Widget _buildVaciarPapeleraTile(BuildContext context, WidgetRef ref) {
+    return _buildOptionTile(
+      context: context,
+      icon: Icons.delete_sweep_outlined,
+      iconColor: Colors.redAccent,
+      title: 'Vaciar papelera',
+      subtitle: 'Elimina permanentemente las notas borradas',
+      onTap: () {
+        final notesAsync = ref.read(notesProvider);
+        notesAsync.whenData((notas) {
+          final enPapelera = notas.where((n) => n.estado == EstadoNoteType.ELIMINADA).toList();
+          if (enPapelera.isEmpty) {
+            AppSnackBar.exito(context, 'La papelera ya está vacía');
+            return;
+          }
+
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text('Vaciar papelera',
                 style: TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: const Text(
-          '¿Estás seguro? Esta acción eliminará permanentemente tu cuenta, todas tus notas y recordatorios. No se puede deshacer.',
-          style: TextStyle(color: Color(0xFF2D3142)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-
-              try {
-                await UsuarioService.eliminarCuenta();
-                await ref.read(authProvider.notifier).logout();
-
-                if (context.mounted) {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    (route) => false,
-                  );
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Cuenta eliminada exitosamente'),
-                      backgroundColor: Color(0xFF2A9D8F),
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                          e.toString().replaceAll('Exception: ', '')),
-                      backgroundColor: Colors.redAccent,
-                    ),
-                  );
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade700,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+              content: Text(
+                '¿Eliminar ${enPapelera.length} nota${enPapelera.length == 1 ? '' : 's'} permanentemente?\nEsta acción no se puede deshacer.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    int eliminadas = 0;
+                    for (final nota in enPapelera) {
+                      try {
+                        await ref.read(notesProvider.notifier).deleteNota(nota.id);
+                        eliminadas++;
+                      } catch (_) {}
+                    }
+                    if (context.mounted) {
+                      AppSnackBar.exito(context, '$eliminadas nota${eliminadas == 1 ? '' : 's'} eliminada${eliminadas == 1 ? '' : 's'} permanentemente');
+                    }
+                  },
+                  child: const Text('Vaciar', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                ),
+              ],
             ),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
+          );
+        });
+      },
     );
   }
 
   // ═══════════════════════════════════════════════════════
   //  WIDGETS AUXILIARES
   // ═══════════════════════════════════════════════════════
-
-  Widget _buildStatsSection(WidgetRef ref) {
-    final notesAsync = ref.watch(notesProvider);
-    final remindersAsync = ref.watch(remindersProvider);
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          _buildStat(
-            icon: Icons.note_alt_outlined,
-            label: 'Notas',
-            value: notesAsync.when(
-              data: (notas) => '${notas.length}',
-              loading: () => '...',
-              error: (_, __) => '0',
-            ),
-            color: Colors.blueAccent,
-          ),
-          Container(
-              width: 1, height: 40, color: Colors.grey.withOpacity(0.15)),
-          _buildStat(
-            icon: Icons.notifications_outlined,
-            label: 'Recordatorios',
-            value: remindersAsync.when(
-              data: (recs) => '${recs.length}',
-              loading: () => '...',
-              error: (_, __) => '0',
-            ),
-            color: Colors.orange,
-          ),
-          Container(
-              width: 1, height: 40, color: Colors.grey.withOpacity(0.15)),
-          _buildStat(
-            icon: Icons.check_circle_outline,
-            label: 'Completados',
-            value: remindersAsync.when(
-              data: (recs) =>
-                  '${recs.where((r) => r.completado).length}',
-              loading: () => '...',
-              error: (_, __) => '0',
-            ),
-            color: Colors.green,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStat({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Expanded(
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2D3142),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(color: Colors.grey, fontSize: 11),
-          ),
-        ],
-      ),
-    );
+  Widget _sectionLabel(String label, BuildContext context) {
+    return Text(label,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+        letterSpacing: 0.8,
+      ));
   }
 
   Widget _buildOptionTile({
+    required BuildContext context,
     required IconData icon,
+    required Color iconColor,
     required String title,
     required String subtitle,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
+    Widget? trailing,
   }) {
+    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: const Color(0xFF2A9D8F).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
+      child: Opacity(
+        opacity: onTap == null ? 0.45 : 1.0,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [BoxShadow(color: cs.shadow.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
               ),
-              child: Icon(icon, color: const Color(0xFF2A9D8F), size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: Color(0xFF2D3142),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: cs.onSurface)),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 12)),
+                  ],
+                ),
               ),
-            ),
-            Icon(Icons.chevron_right,
-                color: Colors.grey.withOpacity(0.4), size: 20),
-          ],
+              trailing ?? Icon(Icons.chevron_right, color: cs.onSurface.withOpacity(0.3), size: 20),
+            ],
+          ),
         ),
       ),
     );
   }
 
+  // ═══════════════════════════════════════════════════════
+  //  LOGOUT
+  // ═══════════════════════════════════════════════════════
   void _confirmarLogout(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Cerrar sesión',
-          style:
-              TextStyle(color: Color(0xFF2D3142), fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          '¿Estás seguro de que quieres salir?',
-          style: TextStyle(color: Color(0xFF2D3142)),
-        ),
+        title: const Text('Cerrar sesión', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('¿Estás seguro de que quieres salir?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child:
-                const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
           ),
           TextButton(
             onPressed: () async {
@@ -741,11 +669,7 @@ class SettingsScreen extends ConsumerWidget {
                 );
               }
             },
-            child: const Text(
-              'Salir',
-              style: TextStyle(
-                  color: Colors.redAccent, fontWeight: FontWeight.bold),
-            ),
+            child: const Text('Salir', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

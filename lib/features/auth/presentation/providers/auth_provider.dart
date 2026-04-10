@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:notes_app/features/auth/domain/usuario_model.dart';
-import 'package:notes_app/core/enums/role_type.dart';
 import 'package:notes_app/core/network/services/auth_service.dart';
 import 'package:notes_app/core/network/api_client.dart';
 import 'package:notes_app/features/notes/presentation/providers/notes_provider.dart';
@@ -28,14 +26,6 @@ class AuthState {
 }
 
 class AuthNotifier extends Notifier<AuthState> {
-  // Configuración de Google Sign-In
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    // Pega aquí directamente tu "ID de cliente de Aplicación Web":
-    serverClientId:
-        '629484307416-t8e1qr4m0q6u2r9upn7aslbt5rp1kjtv.apps.googleusercontent.com',
-    scopes: ['email', 'profile'],
-  );
-
   @override
   AuthState build() => const AuthState();
 
@@ -120,57 +110,8 @@ class AuthNotifier extends Notifier<AuthState> {
     }
   }
 
-  // Inicio de sesión con Google
-  Future<bool> signInWithGoogle() async {
-    state = state.copyWith(isLoading: true, error: null);
-
-    try {
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) {
-        // El usuario canceló el flujo de login
-        state = state.copyWith(isLoading: false);
-        return false;
-      }
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-      final String? idToken = googleAuth.idToken;
-
-      if (idToken == null) {
-        state = const AuthState(
-          error: 'No se pudo obtener el ID Token de Google',
-        );
-        return false;
-      }
-
-      // Enviar el ID token al backend
-      final data = await AuthService.signInWithGoogle(idToken);
-      final usuario = Usuario.fromJson(data['usuario']);
-      state = AuthState(usuario: usuario);
-
-      ref.invalidate(notesProvider);
-      ref.invalidate(remindersProvider);
-
-      return true;
-    } catch (e) {
-      // Limpiar estado en caso de error
-      try {
-        await _googleSignIn.signOut();
-      } catch (_) {}
-      state = AuthState(error: e.toString().replaceAll('Exception: ', ''));
-      return false;
-    }
-  }
-
   // Cerrar sesión
   Future<void> logout() async {
-    // Cerrar sesión de Google si existe localmente
-    try {
-      if (await _googleSignIn.isSignedIn()) {
-        await _googleSignIn.signOut();
-      }
-    } catch (_) {}
-
     // Invalidar refresh token en backend + limpiar sesión local
     await AuthService.logout();
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:notes_app/core/utils/app_snackbar.dart';
 import 'package:notes_app/core/network/services/auth_service.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -34,12 +35,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     try {
       final message = await AuthService.forgotPassword(email);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: const Color(0xFF2A9D8F),
-          ),
-        );
+        AppSnackBar.exito(context, message);
         // Navegar a la pantalla para ingresar el código y nueva contraseña
         Navigator.pushReplacementNamed(context, '/reset-password');
       }

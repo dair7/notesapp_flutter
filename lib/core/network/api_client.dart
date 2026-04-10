@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:notes_app/core/config/app_config.dart';
 
 class ApiClient {
-  // Cambia esta URL según tu entorno
-  static const String baseUrl = 'http://192.168.1.138:8080';
+
+  static const String baseUrl = AppConfig.baseUrl;
+  
 
   static const _storage = FlutterSecureStorage();
   static const String _tokenKey = 'jwt_token';

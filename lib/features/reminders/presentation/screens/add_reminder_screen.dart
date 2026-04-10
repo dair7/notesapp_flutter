@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notes_app/features/notes/domain/nota_model.dart';
 import 'package:notes_app/features/notes/presentation/providers/notes_provider.dart';
+import 'package:notes_app/features/reminders/domain/recordatorio_model.dart';
 import 'package:notes_app/features/reminders/presentation/providers/reminders_provider.dart';
+import 'package:notes_app/core/widgets/custom_date_picker.dart';
+import 'package:notes_app/core/widgets/custom_time_picker.dart';
+import 'package:notes_app/features/settings/presentation/providers/settings_provider.dart';
+import 'package:notes_app/core/utils/app_snackbar.dart';
 
 class AddReminderScreen extends ConsumerStatefulWidget {
   final Nota? notaPreseleccionada;
@@ -19,7 +24,9 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
   TimeOfDay _horaSeleccionada = TimeOfDay.fromDateTime(
     DateTime.now().add(const Duration(hours: 1)),
   );
+  Prioridad _prioridad = Prioridad.MEDIA;
   bool _isLoading = false;
+  Color _accentColor = const Color(0xFF2A9D8F);
 
   @override
   void initState() {
@@ -28,48 +35,21 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
   }
 
   Future<void> _seleccionarFecha() async {
-    final fecha = await showDatePicker(
+    final fecha = await mostrarDatePickerPersonalizado(
       context: context,
-      initialDate: _fechaSeleccionada,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF2A9D8F),
-              onPrimary: Colors.white,
-              surface: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
+      fechaInicial: _fechaSeleccionada,
+      fechaMinima: DateTime.now(),
+      fechaMaxima: DateTime.now().add(const Duration(days: 365)),
     );
-    if (fecha != null) {
-      setState(() => _fechaSeleccionada = fecha);
-    }
+    if (fecha != null) setState(() => _fechaSeleccionada = fecha);
   }
 
   Future<void> _seleccionarHora() async {
-    final hora = await showTimePicker(
+    final hora = await mostrarTimePickerPersonalizado(
       context: context,
-      initialTime: _horaSeleccionada,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF2A9D8F),
-              onPrimary: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
+      horaInicial: _horaSeleccionada,
     );
-    if (hora != null) {
-      setState(() => _horaSeleccionada = hora);
-    }
+    if (hora != null) setState(() => _horaSeleccionada = hora);
   }
 
   DateTime get _fechaHoraFinal {
@@ -92,26 +72,12 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
 
   Future<void> _guardarRecordatorio() async {
     if (_notaSeleccionada == null || _notaSeleccionada!.id == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Selecciona una nota primero'),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      AppSnackBar.error(context, 'Selecciona una nota primero');
       return;
     }
 
     if (_fechaHoraFinal.isBefore(DateTime.now())) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('La fecha debe ser en el futuro'),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      AppSnackBar.error(context, 'La fecha debe ser en el futuro');
       return;
     }
 
@@ -121,47 +87,35 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
       await ref.read(remindersProvider.notifier).addRecordatorio(
         _notaSeleccionada!.id!,
         _fechaHoraFinal,
+        _prioridad,
       );
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Recordatorio creado'),
-            backgroundColor: const Color(0xFF2A9D8F),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        AppSnackBar.exito(context, 'Tarea creada');
         Navigator.pop(context);
       }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        AppSnackBar.error(context, e.toString().replaceAll('Exception: ', ''));
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    _accentColor = ref.watch(settingsProvider).accentColor;
     final notesAsync = ref.watch(notesProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
+      backgroundColor: cs.surfaceContainerLow,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: cs.surfaceContainerLowest,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF2D3142)),
-        title: const Text(
-          'Nuevo Recordatorio',
-          style: TextStyle(color: Color(0xFF2D3142), fontSize: 16),
+        iconTheme: IconThemeData(color: cs.onSurface),
+        title: Text(
+          'Nueva Tarea',
+          style: TextStyle(color: cs.onSurface, fontSize: 16),
         ),
         actions: [
           Padding(
@@ -169,22 +123,14 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
             child: TextButton.icon(
               onPressed: _isLoading ? null : _guardarRecordatorio,
               icon: _isLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Color(0xFF2A9D8F),
-                      ),
+                  ? SizedBox(
+                      width: 16, height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: _accentColor),
                     )
-                  : const Icon(Icons.check, color: Color(0xFF2A9D8F)),
-              label: const Text(
+                  : Icon(Icons.check, color: _accentColor),
+              label: Text(
                 'Guardar',
-                style: TextStyle(
-                  color: Color(0xFF2A9D8F),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: _accentColor, fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ),
           ),
@@ -196,48 +142,30 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ─── Seleccionar Nota ──────────────────
-            const Text(
-              'Nota asociada',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF2D3142),
-              ),
-            ),
+            Text('Nota asociada',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.onSurface)),
             const SizedBox(height: 10),
 
             notesAsync.when(
-              loading: () => const Center(
-                child: CircularProgressIndicator(color: Color(0xFF2A9D8F)),
-              ),
-              error: (e, _) => Text('Error: $e',
-                  style: const TextStyle(color: Colors.redAccent)),
+              loading: () => Center(child: CircularProgressIndicator(color: _accentColor)),
+              error: (e, _) => Text('Error: $e', style: const TextStyle(color: Colors.redAccent)),
               data: (notas) {
                 if (notas.isEmpty) {
                   return Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: cs.surfaceContainerLowest,
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Text(
-                      'No tienes notas. Crea una nota primero.',
-                      style: TextStyle(color: Colors.grey),
-                    ),
+                    child: Text('No tienes notas. Crea una nota primero.',
+                      style: TextStyle(color: cs.onSurface.withOpacity(0.5))),
                   );
                 }
 
                 return Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: cs.surfaceContainerLowest,
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
                   ),
                   child: Column(
                     children: notas.map((nota) {
@@ -245,38 +173,31 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
                       return GestureDetector(
                         onTap: () => setState(() => _notaSeleccionada = nota),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? const Color(0xFF2A9D8F).withOpacity(0.08)
+                                ? _accentColor.withOpacity(0.08)
                                 : Colors.transparent,
                             border: Border(
-                              bottom: BorderSide(
-                                color: Colors.grey.withOpacity(0.1),
-                              ),
+                              bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.2)),
                             ),
                           ),
                           child: Row(
                             children: [
                               Container(
-                                width: 24,
-                                height: 24,
+                                width: 24, height: 24,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: isSelected
-                                      ? const Color(0xFF2A9D8F)
-                                      : Colors.transparent,
+                                  color: isSelected ? _accentColor : Colors.transparent,
                                   border: Border.all(
                                     color: isSelected
-                                        ? const Color(0xFF2A9D8F)
-                                        : Colors.grey.withOpacity(0.4),
+                                        ? _accentColor
+                                        : cs.onSurface.withOpacity(0.3),
                                     width: 2,
                                   ),
                                 ),
                                 child: isSelected
-                                    ? const Icon(Icons.check,
-                                        size: 14, color: Colors.white)
+                                    ? const Icon(Icons.check, size: 14, color: Colors.white)
                                     : null,
                               ),
                               const SizedBox(width: 12),
@@ -285,10 +206,8 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
                                   nota.titulo,
                                   style: TextStyle(
                                     fontSize: 15,
-                                    fontWeight: isSelected
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
-                                    color: const Color(0xFF2D3142),
+                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                    color: cs.onSurface,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -307,44 +226,25 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
             const SizedBox(height: 28),
 
             // ─── Seleccionar Fecha ─────────────────
-            const Text(
-              'Fecha',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF2D3142),
-              ),
-            ),
+            Text('Fecha',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.onSurface)),
             const SizedBox(height: 10),
             GestureDetector(
               onTap: _seleccionarFecha,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cs.surfaceContainerLowest,
                   borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.calendar_today,
-                        color: Color(0xFF2A9D8F), size: 20),
+                    Icon(Icons.calendar_today, color: _accentColor, size: 20),
                     const SizedBox(width: 12),
-                    Text(
-                      _formatFecha(_fechaSeleccionada),
-                      style: const TextStyle(
-                          fontSize: 15, color: Color(0xFF2D3142)),
-                    ),
+                    Text(_formatFecha(_fechaSeleccionada),
+                      style: TextStyle(fontSize: 15, color: cs.onSurface)),
                     const Spacer(),
-                    Icon(Icons.chevron_right,
-                        color: Colors.grey.withOpacity(0.4)),
+                    Icon(Icons.chevron_right, color: cs.onSurface.withOpacity(0.3)),
                   ],
                 ),
               ),
@@ -353,47 +253,77 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
             const SizedBox(height: 18),
 
             // ─── Seleccionar Hora ──────────────────
-            const Text(
-              'Hora',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF2D3142),
-              ),
-            ),
+            Text('Hora',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.onSurface)),
             const SizedBox(height: 10),
             GestureDetector(
               onTap: _seleccionarHora,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cs.surfaceContainerLowest,
                   borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.access_time,
-                        color: Color(0xFF2A9D8F), size: 20),
+                    Icon(Icons.access_time, color: _accentColor, size: 20),
                     const SizedBox(width: 12),
                     Text(
                       '${_horaSeleccionada.hour.toString().padLeft(2, '0')}:${_horaSeleccionada.minute.toString().padLeft(2, '0')}',
-                      style: const TextStyle(
-                          fontSize: 15, color: Color(0xFF2D3142)),
+                      style: TextStyle(fontSize: 15, color: cs.onSurface),
                     ),
                     const Spacer(),
-                    Icon(Icons.chevron_right,
-                        color: Colors.grey.withOpacity(0.4)),
+                    Icon(Icons.chevron_right, color: cs.onSurface.withOpacity(0.3)),
                   ],
                 ),
               ),
+            ),
+
+            const SizedBox(height: 28),
+
+            // ─── Selector de Prioridad ────────────
+            Text('Prioridad',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.onSurface)),
+            const SizedBox(height: 10),
+            Row(
+              children: Prioridad.values.map((p) {
+                final isSelected = _prioridad == p;
+                final color = p == Prioridad.ALTA
+                    ? Colors.redAccent
+                    : p == Prioridad.MEDIA
+                        ? Colors.orange
+                        : Colors.blueAccent;
+                final label = p == Prioridad.ALTA ? 'Alta' : p == Prioridad.MEDIA ? 'Media' : 'Baja';
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _prioridad = p),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected ? color.withOpacity(0.12) : cs.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isSelected ? color : cs.outlineVariant.withOpacity(0.3),
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(Icons.flag_rounded, color: isSelected ? color : cs.onSurface.withOpacity(0.3), size: 20),
+                          const SizedBox(height: 4),
+                          Text(label, style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            color: isSelected ? color : cs.onSurface.withOpacity(0.5),
+                          )),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
 
             const SizedBox(height: 28),
@@ -403,23 +333,20 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2A9D8F).withOpacity(0.06),
+                  color: _accentColor.withOpacity(0.06),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: const Color(0xFF2A9D8F).withOpacity(0.15),
-                  ),
+                  border: Border.all(color: _accentColor.withOpacity(0.15)),
                 ),
                 child: Row(
                   children: [
                     Container(
-                      width: 42,
-                      height: 42,
+                      width: 42, height: 42,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2A9D8F).withOpacity(0.12),
+                        color: _accentColor.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.notifications_outlined,
-                          color: Color(0xFF2A9D8F), size: 20),
+                      child: Icon(Icons.notifications_outlined,
+                          color: _accentColor, size: 20),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -428,19 +355,14 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
                         children: [
                           Text(
                             _notaSeleccionada!.titulo,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: Color(0xFF2D3142),
-                            ),
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: cs.onSurface),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
                           Text(
                             '${_formatFecha(_fechaHoraFinal)} a las ${_horaSeleccionada.hour.toString().padLeft(2, '0')}:${_horaSeleccionada.minute.toString().padLeft(2, '0')}',
-                            style: const TextStyle(
-                                color: Colors.grey, fontSize: 12),
+                            style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 12),
                           ),
                         ],
                       ),

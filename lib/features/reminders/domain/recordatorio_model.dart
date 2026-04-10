@@ -1,9 +1,12 @@
+enum Prioridad { ALTA, MEDIA, BAJA }
+
 class Recordatorio {
   final int? id;
   final DateTime fecha;
   final bool completado;
   final int? notaId;
   final String? notaTitulo;
+  final Prioridad prioridad;
 
   Recordatorio({
     this.id,
@@ -11,9 +14,9 @@ class Recordatorio {
     this.completado = false,
     this.notaId,
     this.notaTitulo,
+    this.prioridad = Prioridad.MEDIA,
   });
 
-  // De Spring Boot (JSON) -> a Flutter (Objeto)
   factory Recordatorio.fromJson(Map<String, dynamic> json) {
     return Recordatorio(
       id: json['id'],
@@ -21,13 +24,22 @@ class Recordatorio {
       completado: json['completado'] ?? false,
       notaId: json['notaId'],
       notaTitulo: json['notaTitulo'],
+      prioridad: _parsePrioridad(json['prioridad']),
     );
   }
 
-  // De Flutter (Objeto) -> a Spring Boot (JSON)
   Map<String, dynamic> toJson() {
     return {
       'fecha': fecha.toIso8601String(),
+      'prioridad': prioridad.name,
     };
+  }
+
+  static Prioridad _parsePrioridad(String? valor) {
+    switch (valor) {
+      case 'ALTA': return Prioridad.ALTA;
+      case 'BAJA': return Prioridad.BAJA;
+      default:     return Prioridad.MEDIA;
+    }
   }
 }

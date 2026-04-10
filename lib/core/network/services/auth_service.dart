@@ -25,29 +25,6 @@ class AuthService {
     }
   }
 
-  // POST /api/auth/google
-  static Future<Map<String, dynamic>> signInWithGoogle(String idToken) async {
-    final response = await ApiClient.post(
-      '/api/auth/google',
-      body: {'idToken': idToken},
-      auth: false,
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      // Guardar access token, refresh token y userId
-      await ApiClient.saveToken(data['token']);
-      if (data['refreshToken'] != null) {
-        await ApiClient.saveRefreshToken(data['refreshToken']);
-      }
-      await ApiClient.saveUserId(data['usuario']['id']);
-      return data;
-    } else {
-      final error = jsonDecode(response.body);
-      throw Exception(error['mensaje'] ?? 'Error al iniciar sesión con Google');
-    }
-  }
-
   // POST /api/auth/register
   static Future<Map<String, dynamic>> register(String nombre, String email, String password) async {
     final response = await ApiClient.post(

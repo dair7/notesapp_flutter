@@ -4,10 +4,21 @@ import '../../../features/notes/domain/nota_model.dart';
 
 class NotasService {
   // POST /api/notas/{usuarioId}
-  static Future<Nota> crearNota(int usuarioId, String titulo, String contenido) async {
+  static Future<Nota> crearNota(
+    int usuarioId,
+    String titulo,
+    String contenido, {
+    String? color,
+    List<String> etiquetas = const [],
+  }) async {
     final response = await ApiClient.post(
       '/api/notas/$usuarioId',
-      body: {'titulo': titulo, 'contenido': contenido},
+      body: {
+        'titulo': titulo,
+        'contenido': contenido,
+        'color': color,
+        'etiquetas': etiquetas.isEmpty ? null : etiquetas.join(','),
+      },
     );
 
     if (response.statusCode == 200) {
@@ -55,10 +66,21 @@ class NotasService {
   }
 
   // PUT /api/notas/{notaId}
-  static Future<Nota> actualizarNota(int notaId, String titulo, String contenido) async {
+  static Future<Nota> actualizarNota(
+    int notaId,
+    String titulo,
+    String contenido, {
+    String? color,
+    List<String> etiquetas = const [],
+  }) async {
     final response = await ApiClient.put(
       '/api/notas/$notaId',
-      body: {'titulo': titulo, 'contenido': contenido},
+      body: {
+        'titulo': titulo,
+        'contenido': contenido,
+        'color': color,
+        'etiquetas': etiquetas.isEmpty ? null : etiquetas.join(','),
+      },
     );
 
     if (response.statusCode == 200) {

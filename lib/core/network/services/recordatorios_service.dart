@@ -4,10 +4,13 @@ import '../../../features/reminders/domain/recordatorio_model.dart';
 
 class RecordatoriosService {
   // POST /api/recordatorios/{notaId}
-  static Future<Recordatorio> crearRecordatorio(int notaId, DateTime fecha) async {
+  static Future<Recordatorio> crearRecordatorio(int notaId, DateTime fecha, Prioridad prioridad) async {
     final response = await ApiClient.post(
       '/api/recordatorios/$notaId',
-      body: {'fecha': fecha.toIso8601String()},
+      body: {
+        'fecha': fecha.toIso8601String(),
+        'prioridad': prioridad.name,
+      },
     );
 
     if (response.statusCode == 200) {
@@ -40,6 +43,22 @@ class RecordatoriosService {
       return data.map((json) => Recordatorio.fromJson(json)).toList();
     } else {
       throw Exception('Error al obtener recordatorios pendientes');
+    }
+  }
+
+  // PUT /api/recordatorios/{id}
+  static Future<Recordatorio> actualizarFecha(int recordatorioId, DateTime nuevaFecha) async {
+    final response = await ApiClient.put(
+      '/api/recordatorios/$recordatorioId',
+      body: {'fecha': nuevaFecha.toIso8601String()},
+    );
+
+    if (response.statusCode == 200) {
+      return Recordatorio.fromJson(jsonDecode(response.body));
+    } else {
+      String msg = 'Error al actualizar recordatorio';
+      try { msg = jsonDecode(response.body)['mensaje'] ?? msg; } catch (_) {}
+      throw Exception(msg);
     }
   }
 

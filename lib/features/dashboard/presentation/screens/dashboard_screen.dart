@@ -1,149 +1,237 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart'; // 1. Importamos Riverpod
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// ¡Atención! Ajusta estos imports según tus carpetas
 import '../../../notes/domain/nota_model.dart';
-import '../../../notes/presentation/providers/notes_provider.dart'; // 2. Importamos nuestro Provider
+import '../../../notes/presentation/providers/notes_provider.dart';
 import '../../../reminders/domain/recordatorio_model.dart';
 import '../../../reminders/presentation/providers/reminders_provider.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import 'package:notes_app/features/settings/presentation/providers/settings_provider.dart';
 
-// 3. Cambiamos StatefulWidget por ConsumerWidget
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
-  String _formatTime(DateTime date) {
-    return "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
+  // ── Helpers de formato ───────────────────────────────
+  String _hora(DateTime d) =>
+      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+  String _fecha(DateTime d) {
+    const meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    return '${d.day} ${meses[d.month - 1]}';
   }
 
-  // 4. El método build ahora recibe 'ref', nuestra antena para escuchar a Riverpod
+  String _tiempoRestante(DateTime fecha) {
+    final dif = fecha.difference(DateTime.now());
+    if (dif.isNegative) return 'Vencido';
+    if (dif.inMinutes < 60) return '${dif.inMinutes} min';
+    if (dif.inHours < 24)   return '${dif.inHours} h';
+    return '${dif.inDays} d';
+  }
+
+  String _saludo() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Buenos días';
+    if (h < 18) return 'Buenas tardes';
+    return 'Buenas noches';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    
-    // 5. Escuchamos el estado de las notas en tiempo real.
-    // 'notesAsync' contendrá la lista, el estado de carga o el error.
-    final notesAsync = ref.watch(notesProvider);
-    final authState = ref.watch(authProvider);
-    final nombre = authState.usuario?.nombre ?? 'Usuario';
+    final notesAsync     = ref.watch(notesProvider);
+    final remindersAsync = ref.watch(remindersProvider);
+    final nombre         = ref.watch(authProvider).usuario?.nombre ?? 'Usuario';
+    final inicial        = nombre.substring(0, 1).toUpperCase();
+    final accentColor    = ref.watch(settingsProvider).accentColor;
 
     return SingleChildScrollView(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- ENCABEZADO ---
+
+          // ── HEADER + STATS SOLAPADA ─────────────────────
           Stack(
             clipBehavior: Clip.none,
             children: [
+              // Fondo verde
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.only(top: 60, left: 24, right: 24, bottom: 40),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF2A9D8F), Color(0xFF21867a)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                padding: const EdgeInsets.only(top: 60, left: 24, right: 24, bottom: 62),
+                decoration: BoxDecoration(
+                  color: accentColor,
                   borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(30),
+                    bottomLeft:  Radius.circular(30),
                     bottomRight: Radius.circular(30),
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text('¡Hola, $nombre!', style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 5),
-                    const Text('Resumen de tu día', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                    const SizedBox(height: 30),
+                    Container(
+                      width: 50, height: 50,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withOpacity(0.2),
+                        border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+                      ),
+                      child: Center(
+                        child: Text(inicial,
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_saludo(),
+                            style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13)),
+                          Text(nombre,
+                            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white.withOpacity(0.3)),
+                      ),
+                      child: Text(_fecha(DateTime.now()),
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
                   ],
                 ),
               ),
+
+              // Stats card solapando el borde inferior del header
               Positioned(
-                bottom: -25,
+                bottom: -52,
                 left: 24,
                 right: 24,
                 child: Container(
-                  height: 50,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(25),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5))],
-                  ),
-                  child: const TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Buscar notas y recordatorios...',
-                      hintStyle: TextStyle(color: Colors.grey),
-                      prefixIcon: Icon(Icons.search, color: Colors.grey),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: 15),
+                    color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: const Color(0xFFE8B237).withOpacity(0.8),
+                      width: 1.7,
                     ),
+                  ),
+                  child: Row(
+                    children: [
+                      _buildStat(
+                        label: 'Notas',
+                        value: notesAsync.when(data: (n) => '${n.length}',
+                            loading: () => '…', error: (_, __) => '0'),
+                        color: Colors.blueAccent,
+                      ),
+                      Container(width: 1, height: 40, color: Colors.grey.withOpacity(0.15)),
+                      _buildStat(
+                        label: 'Pendientes',
+                        value: remindersAsync.when(
+                            data: (r) => '${r.where((x) => !x.completado).length}',
+                            loading: () => '…', error: (_, __) => '0'),
+                        color: Colors.orange,
+                      ),
+                      Container(width: 1, height: 40, color: Colors.grey.withOpacity(0.15)),
+                      _buildStat(
+                        label: 'Completados',
+                        value: remindersAsync.when(
+                            data: (r) => '${r.where((x) => x.completado).length}',
+                            loading: () => '…', error: (_, __) => '0'),
+                        color: const Color(0xFF4CAF50),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ],
           ),
-          
-          const SizedBox(height: 40),
 
-          // --- CONTENIDO DINÁMICO (Manejado por Riverpod) ---
+          const SizedBox(height: 72),
+
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Notas Recientes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2D3142))),
+
+                const SizedBox(height: 10),
+
+                // ── NOTAS RECIENTES ─────────────────────────
+                _sectionHeader(
+                  label: 'Notas recientes',
+                  onVerTodas: () {},
+                ),
                 const SizedBox(height: 12),
-                
-                // 6. Usamos el método .when() de Riverpod. 
-                // Es la forma elegante de manejar Cargando/Error/Datos.
+
                 notesAsync.when(
                   loading: () => const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(20.0),
-                      child: CircularProgressIndicator(color: Color(0xFF2A9D8F)),
-                    )
-                  ),
-                  error: (error, stack) => Text('Error: $error', style: const TextStyle(color: Colors.red)),
+                      child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: CircularProgressIndicator(color: Color(0xFF2A9D8F)),
+                      )),
+                  error: (e, _) => Text('Error: $e',
+                      style: const TextStyle(color: Colors.red)),
                   data: (notas) {
                     if (notas.isEmpty) {
-                      return const Text('No tienes notas aún. ¡Crea una!');
+                      return _emptyState(context,
+                          icon: Icons.note_alt_outlined,
+                          texto: 'Aún no tienes notas');
                     }
+                    final recientes = notas.take(3).toList();
                     return Column(
-                      children: notas.map((nota) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12.0),
-                        child: _buildNoteCard(nota),
-                      )).toList(),
+                      children: recientes.map((n) =>
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _buildNoteCard(context, n),
+                          )).toList(),
                     );
                   },
                 ),
 
-                const SizedBox(height: 25),
+                const SizedBox(height: 28),
 
-                const Text('Próximos Recordatorios', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2D3142))),
+                // ── PRÓXIMOS RECORDATORIOS ──────────────────
+                _sectionHeader(
+                  label: 'Próximos recordatorios',
+                  onVerTodas: () {},
+                ),
                 const SizedBox(height: 12),
 
-                ref.watch(remindersProvider).when(
+                remindersAsync.when(
                   loading: () => const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(20.0),
-                      child: CircularProgressIndicator(color: Color(0xFF2A9D8F)),
-                    ),
-                  ),
-                  error: (error, stack) => Text('Error: $error', style: const TextStyle(color: Colors.red)),
-                  data: (recordatorios) {
-                    final pendientes = recordatorios.where((r) => !r.completado).toList();
+                      child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: CircularProgressIndicator(color: Color(0xFF2A9D8F)),
+                      )),
+                  error: (e, _) => Text('Error: $e',
+                      style: const TextStyle(color: Colors.red)),
+                  data: (recs) {
+                    final pendientes = recs
+                        .where((r) => !r.completado)
+                        .toList()
+                      ..sort((a, b) => a.fecha.compareTo(b.fecha));
                     if (pendientes.isEmpty) {
-                      return const Text('No tienes recordatorios pendientes', style: TextStyle(color: Colors.grey));
+                      return _emptyState(context,
+                          icon: Icons.alarm_outlined,
+                          texto: 'Sin recordatorios pendientes');
                     }
+                    final proximos = pendientes.take(3).toList();
                     return Column(
-                      children: pendientes.map((rec) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10.0),
-                        child: _buildReminderCard(rec),
-                      )).toList(),
+                      children: proximos.map((r) =>
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _buildReminderCard(context, r),
+                          )).toList(),
                     );
                   },
                 ),
 
-                const SizedBox(height: 80),
+                const SizedBox(height: 100),
               ],
             ),
           ),
@@ -151,84 +239,159 @@ class DashboardScreen extends ConsumerWidget {
       ),
     );
   }
-  // Widget de la tarjeta de nota
-  Widget _buildNoteCard(Nota nota) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.withOpacity(0.1)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
+
+  // ═══════════════════════════════════════════════════════
+  //  WIDGETS AUXILIARES
+  // ═══════════════════════════════════════════════════════
+
+  Widget _buildStat({
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Expanded(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(nota.titulo, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF2D3142))),
-          const SizedBox(height: 6),
-          Text(nota.contenido, style: const TextStyle(color: Colors.grey, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              if (nota.fechaCreacion != null)
-                Text(_formatTime(nota.fechaCreacion!), style: const TextStyle(color: Colors.grey, fontSize: 12)),
-            ],
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(value,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
           ),
+          const SizedBox(height: 5),
+          Text(label,
+              style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
 
-  String _tiempoRestante(DateTime fecha) {
-    final diferencia = fecha.difference(DateTime.now());
-    if (diferencia.isNegative) return 'Vencido';
-    if (diferencia.inMinutes < 60) return 'En ${diferencia.inMinutes} min';
-    if (diferencia.inHours < 24) return 'En ${diferencia.inHours} h';
-    return 'En ${diferencia.inDays} d';
+  Widget _sectionHeader({required String label, required VoidCallback onVerTodas}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+              color: Colors.grey, letterSpacing: 0.8)),
+        GestureDetector(
+          onTap: onVerTodas,
+          child: const Text('Ver todas',
+            style: TextStyle(fontSize: 12, color: Color(0xFF2A9D8F),
+                fontWeight: FontWeight.w600)),
+        ),
+      ],
+    );
   }
 
-  Widget _buildReminderCard(Recordatorio rec) {
-    final titulo = rec.notaTitulo ?? 'Sin nota';
+  Widget _emptyState(BuildContext context, {required IconData icon, required String texto}) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(14),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: cs.onSurface.withOpacity(0.2), size: 36),
+          const SizedBox(height: 8),
+          Text(texto, style: TextStyle(color: cs.onSurface.withOpacity(0.45), fontSize: 13)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoteCard(BuildContext context, Nota nota) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withOpacity(0.1)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Row(
         children: [
+          // Acento lateral
           Container(
-            width: 40, height: 40,
+            width: 4, height: 44,
             decoration: BoxDecoration(
-              color: const Color(0xFF2A9D8F).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xFF4A6FA5),
+              borderRadius: BorderRadius.circular(4),
             ),
-            child: const Icon(Icons.notifications_outlined, color: Color(0xFF2A9D8F), size: 20),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(titulo, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2D3142))),
-                const SizedBox(height: 3),
-                Text(_formatTime(rec.fecha), style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                Text(nota.titulo,
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: cs.onSurface)),
+                const SizedBox(height: 4),
+                Text(nota.contenido,
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 12)),
               ],
             ),
           ),
+          const SizedBox(width: 10),
+          if (nota.fechaCreacion != null)
+            Text(_hora(nota.fechaCreacion!),
+              style: TextStyle(color: cs.onSurface.withOpacity(0.45), fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReminderCard(BuildContext context, Recordatorio rec) {
+    final cs         = Theme.of(context).colorScheme;
+    final titulo     = rec.notaTitulo ?? 'Sin nota';
+    final vencido    = rec.fecha.isBefore(DateTime.now());
+    final badgeColor = vencido ? Colors.redAccent : const Color(0xFF2A9D8F);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            width: 42, height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFF2A9D8F).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(8),
+              color: badgeColor.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(13),
             ),
-            child: Text(
-              _tiempoRestante(rec.fecha),
-              style: const TextStyle(color: Color(0xFF2A9D8F), fontSize: 11, fontWeight: FontWeight.bold),
+            child: Icon(Icons.alarm_rounded, color: badgeColor, size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(titulo,
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: cs.onSurface)),
+                const SizedBox(height: 3),
+                Text('${_fecha(rec.fecha)} · ${_hora(rec.fecha)}',
+                  style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 12)),
+              ],
             ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: badgeColor.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(_tiempoRestante(rec.fecha),
+              style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

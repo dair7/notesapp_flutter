@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:notes_app/core/utils/app_snackbar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notes_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:notes_app/features/dashboard/presentation/screens/main_layout.dart';
@@ -30,27 +31,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Future<void> _handleRegister() async {
     if (!_acceptTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Debes aceptar los términos y condiciones'),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      AppSnackBar.error(context, 'Debes aceptar los términos y condiciones');
       return;
     }
 
     if (_passwordController.text != _confirmPasswordController.text) {
       ref.read(authProvider.notifier).login('', ''); // Trigger error state
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Passwords do not match'),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      AppSnackBar.error(context, 'Las contraseñas no coinciden');
       return;
     }
 
@@ -117,7 +104,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
               // Title
               const Text(
-                'Create Account',
+                'Crear cuenta',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 26,
@@ -129,7 +116,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
               // Full Name
               const Text(
-                'Full Name',
+                'Nombre completo',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -139,7 +126,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               const SizedBox(height: 8),
               _buildTextField(
                 controller: _nombreController,
-                hint: 'Your Full Name',
+                hint: 'Tu nombre completo',
                 icon: Icons.account_circle,
               ),
               
@@ -147,7 +134,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
               // Email Address
               const Text(
-                'Email Address',
+                'Correo electrónico',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -157,7 +144,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               const SizedBox(height: 8),
               _buildTextField(
                 controller: _emailController,
-                hint: 'your.name@email.com',
+                hint: 'tu.nombre@correo.com',
                 icon: Icons.mail,
                 keyboardType: TextInputType.emailAddress,
               ),
@@ -166,7 +153,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
               // Password
               const Text(
-                'Password',
+                'Contraseña',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -189,7 +176,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
               // Confirm Password
               const Text(
-                'Confirm Password',
+                'Confirmar contraseña',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -309,67 +296,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ),
                         )
                       : const Text(
-                          'Sign Up',
+                          'Registrarse',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                 ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Or sign up with
-              Row(
-                children: [
-                  Expanded(child: Divider(color: Colors.grey.shade300)),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      'or sign up with',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade500,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  Expanded(child: Divider(color: Colors.grey.shade300)),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Social Buttons
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildSocialButton(
-                    onTap: () async {
-                      final success = await ref.read(authProvider.notifier).signInWithGoogle();
-                      if (success && mounted) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => const MainLayout()),
-                        );
-                      }
-                    },
-                    child: _buildGoogleIcon(),
-                  ),
-                  const SizedBox(width: 20),
-                  _buildSocialButton(
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Microsoft login - Próximamente'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                    child: _buildMicrosoftIcon(),
-                  ),
-                ],
               ),
 
               const SizedBox(height: 48),
@@ -380,11 +313,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   onTap: () => Navigator.pop(context),
                   child: RichText(
                     text: const TextSpan(
-                      text: "Already have an account? ",
+                      text: '¿Ya tienes una cuenta? ',
                       style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
                       children: [
                         TextSpan(
-                          text: 'Log In',
+                          text: 'Inicia sesión',
                           style: TextStyle(
                             color: Color(0xFF1E293B),
                             fontWeight: FontWeight.bold,
@@ -451,55 +384,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     );
   }
 
-  Widget _buildSocialButton({
-    required VoidCallback onTap,
-    required Widget child,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: 60,
-        height: 50,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
-        ),
-        alignment: Alignment.center,
-        child: child,
-      ),
-    );
-  }
 
-  Widget _buildGoogleIcon() {
-    return const Text(
-      'G',
-      style: TextStyle(
-        fontSize: 22,
-        fontWeight: FontWeight.bold,
-        color: Colors.red,
-      ),
-    );
-  }
 
-  Widget _buildMicrosoftIcon() {
-    return SizedBox(
-      width: 20,
-      height: 20,
-      child: GridView.count(
-        crossAxisCount: 2,
-        mainAxisSpacing: 2,
-        crossAxisSpacing: 2,
-        physics: const NeverScrollableScrollPhysics(),
-        children: [
-          Container(color: const Color(0xFFF25022)),
-          Container(color: const Color(0xFF7FBA00)),
-          Container(color: const Color(0xFF00A4EF)),
-          Container(color: const Color(0xFFFFB900)),
-        ],
-      ),
-    );
-  }
 }
 

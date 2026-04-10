@@ -6,6 +6,7 @@ class Usuario {
   final String email;
   final String? password; // Solo se usa para enviar al backend al registrarse
   final RoleType role;
+  final String estadoUsuario; // ACTIVO | INACTIVO
   final DateTime? createdAt;
 
   Usuario({
@@ -14,8 +15,11 @@ class Usuario {
     required this.email,
     this.password,
     this.role = RoleType.USER,
+    this.estadoUsuario = 'ACTIVO',
     this.createdAt,
   });
+
+  bool get isActivo => estadoUsuario == 'ACTIVO';
 
   // De Spring Boot (JSON) -> a Flutter (Objeto)
   factory Usuario.fromJson(Map<String, dynamic> json) {
@@ -24,6 +28,7 @@ class Usuario {
       nombre: json['nombre'],
       email: json['email'],
       role: RoleType.fromString(json['role'] ?? 'USER'),
+      estadoUsuario: json['estadoUsuario'] ?? 'ACTIVO',
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
     );
   }
@@ -36,6 +41,7 @@ class Usuario {
       'email': email,
       if (password != null) 'password': password,
       'role': role.name,
+      'estadoUsuario': estadoUsuario,
       if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
     };
   }

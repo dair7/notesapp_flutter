@@ -1,10 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notes_app/features/notes/domain/nota_model.dart';
+import 'package:notes_app/core/enums/estado_note_type.dart';
 import 'package:notes_app/core/network/services/notas_service.dart';
 import 'package:notes_app/core/network/api_client.dart';
 
 class NotesNotifier extends AsyncNotifier<List<Nota>> {
-  
+
   @override
   Future<List<Nota>> build() async {
     final userId = await ApiClient.getUserId();
@@ -21,6 +22,8 @@ class NotesNotifier extends AsyncNotifier<List<Nota>> {
       userId,
       nuevaNota.titulo,
       nuevaNota.contenido,
+      color: nuevaNota.color,
+      etiquetas: nuevaNota.etiquetas,
     );
 
     final notasActuales = state.value ?? [];
@@ -35,17 +38,19 @@ class NotesNotifier extends AsyncNotifier<List<Nota>> {
       notaActualizada.id!,
       notaActualizada.titulo,
       notaActualizada.contenido,
+      color: notaActualizada.color,
+      etiquetas: notaActualizada.etiquetas,
     );
 
     final notasActuales = state.value ?? [];
     final nuevasNotas = notasActuales.map((nota) {
       return nota.id == notaUpdated.id ? notaUpdated : nota;
     }).toList();
-    
+
     state = AsyncData(nuevasNotas);
   }
 
-  // Cambiar estado de nota (ACTIVA, ARCHIVADA, ELIMINADA)
+  // Cambiar estado de nota (ACTIVA, ARCHIVADA, ELIMINADA) — llama al backend
   Future<void> cambiarEstado(int notaId, String nuevoEstado) async {
     final notaUpdated = await NotasService.cambiarEstado(notaId, nuevoEstado);
 
@@ -53,19 +58,41 @@ class NotesNotifier extends AsyncNotifier<List<Nota>> {
     final nuevasNotas = notasActuales.map((nota) {
       return nota.id == notaUpdated.id ? notaUpdated : nota;
     }).toList();
-    
+
+    state = AsyncData(nuevasNotas);
+  }
+
+  // Cambio de estado solo local (sin llamada al backend) — para UI optimista
+  void cambiarEstadoLocal(int notaId, String nuevoEstado) {
+    final notasActuales = state.value ?? [];
+    final nuevasNotas = notasActuales.map((nota) {
+      if (nota.id != notaId) return nota;
+      // Se preservan color y etiquetas en el cambio local de estado
+      return Nota(
+        id: nota.id,
+        titulo: nota.titulo,
+        contenido: nota.contenido,
+        fechaCreacion: nota.fechaCreacion,
+        estado: EstadoNoteType.fromString(nuevoEstado),
+        usuarioId: nota.usuarioId,
+        usuarioNombre: nota.usuarioNombre,
+        esAnclada: nota.esAnclada,
+        color: nota.color,
+        etiquetas: nota.etiquetas,
+      );
+    }).toList();
     state = AsyncData(nuevasNotas);
   }
 
   // Eliminar nota del backend (permanente)
   Future<void> deleteNota(int? notaId) async {
     if (notaId == null) return;
-    
+
     await NotasService.eliminarNota(notaId);
 
     final notasActuales = state.value ?? [];
     final nuevasNotas = notasActuales.where((n) => n.id != notaId).toList();
-    
+
     state = AsyncData(nuevasNotas);
   }
 
@@ -73,15 +100,23 @@ class NotesNotifier extends AsyncNotifier<List<Nota>> {
   Future<void> anclarNotasMasivo(List<int> notasIds, bool estadoAnclado) async {
     try {
       await NotasService.anclarNotasLote(notasIds, estadoAnclado);
-      
+
       if (state.hasValue) {
         final actuales = state.value!;
         final actualizadas = actuales.map((nota) {
            if (notasIds.contains(nota.id)) {
+              // Se preservan color y etiquetas al anclar masivamente
               return Nota(
-                 id: nota.id, titulo: nota.titulo, contenido: nota.contenido, 
-                 estado: nota.estado, fechaCreacion: nota.fechaCreacion, 
-                 esAnclada: estadoAnclado
+                 id: nota.id,
+                 titulo: nota.titulo,
+                 contenido: nota.contenido,
+                 estado: nota.estado,
+                 fechaCreacion: nota.fechaCreacion,
+                 usuarioId: nota.usuarioId,
+                 usuarioNombre: nota.usuarioNombre,
+                 esAnclada: estadoAnclado,
+                 color: nota.color,
+                 etiquetas: nota.etiquetas,
               );
            }
            return nota;

@@ -60,9 +60,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Title
+              // Título
               const Text(
-                'Welcome Back',
+                'Bienvenido de nuevo',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 26,
@@ -72,9 +72,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 48),
 
-              // Email Address
+              // Correo electrónico
               const Text(
-                'Email Address',
+                'Correo electrónico',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -84,16 +84,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 8),
               _buildTextField(
                 controller: _emailController,
-                hint: 'your.name@email.com',
+                hint: 'tu.nombre@correo.com',
                 icon: Icons.mail,
                 keyboardType: TextInputType.emailAddress,
               ),
 
               const SizedBox(height: 20),
 
-              // Password
+              // Contraseña
               const Text(
-                'Password',
+                'Contraseña',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -125,7 +125,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: const Text(
-                    'Forgot Password?',
+                    '¿Olvidaste tu contraseña?',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -192,67 +192,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         )
                       : const Text(
-                          'Log In',
+                          'Iniciar sesión',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                 ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Or log in with
-              Row(
-                children: [
-                  Expanded(child: Divider(color: Colors.grey.shade300)),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      'or log in with',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade500,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  Expanded(child: Divider(color: Colors.grey.shade300)),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Social Buttons (Coming Soon)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildSocialButton(
-                    onTap: () async {
-                      final success = await ref.read(authProvider.notifier).signInWithGoogle();
-                      if (success && mounted) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => const MainLayout()),
-                        );
-                      }
-                    },
-                    child: _buildGoogleIcon(),
-                  ),
-                  const SizedBox(width: 20),
-                  _buildSocialButton(
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Microsoft login - Próximamente'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                    child: _buildMicrosoftIcon(),
-                  ),
-                ],
               ),
 
               const SizedBox(height: 48),
@@ -268,11 +214,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   },
                   child: RichText(
                     text: const TextSpan(
-                      text: "Don't have an account? ",
+                      text: '¿No tienes una cuenta? ',
                       style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
                       children: [
                         TextSpan(
-                          text: 'Sign Up',
+                          text: 'Regístrate',
                           style: TextStyle(
                             color: Color(0xFF1E293B),
                             fontWeight: FontWeight.bold,
@@ -342,54 +288,5 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildSocialButton({
-    required VoidCallback onTap,
-    required Widget child,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: 60,
-        height: 50,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
-        ),
-        alignment: Alignment.center,
-        child: child,
-      ),
-    );
-  }
 
-  Widget _buildGoogleIcon() {
-    return const Text(
-      'G',
-      style: TextStyle(
-        fontSize: 22,
-        fontWeight: FontWeight.bold,
-        color: Colors.red,
-      ),
-    );
-  }
-
-  Widget _buildMicrosoftIcon() {
-    return SizedBox(
-      width: 20,
-      height: 20,
-      child: GridView.count(
-        crossAxisCount: 2,
-        mainAxisSpacing: 2,
-        crossAxisSpacing: 2,
-        physics: const NeverScrollableScrollPhysics(),
-        children: [
-          Container(color: const Color(0xFFF25022)),
-          Container(color: const Color(0xFF7FBA00)),
-          Container(color: const Color(0xFF00A4EF)),
-          Container(color: const Color(0xFFFFB900)),
-        ],
-      ),
-    );
-  }
 }

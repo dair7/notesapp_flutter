@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:notes_app/core/utils/app_snackbar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notes_app/features/auth/domain/usuario_model.dart';
 import 'package:notes_app/core/network/services/admin_service.dart';
@@ -35,15 +36,11 @@ class _UsersListScreenState extends ConsumerState<UsersListScreen> {
                 await AdminService.eliminarUsuario(usuario.id!);
                 ref.invalidate(normalUsersProvider);
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${usuario.nombre} eliminado'), backgroundColor: const Color(0xFF2A9D8F), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                  );
+                  AppSnackBar.exito(context, '${usuario.nombre} eliminado');
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: ${e.toString().replaceAll("Exception: ", "")}'), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                  );
+                  AppSnackBar.error(context, e.toString().replaceAll('Exception: ', ''));
                 }
               }
             },
