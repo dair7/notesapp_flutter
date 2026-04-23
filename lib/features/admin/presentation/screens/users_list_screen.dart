@@ -40,7 +40,7 @@ class _UsersListScreenState extends ConsumerState<UsersListScreen> {
                 }
               } catch (e) {
                 if (mounted) {
-                  AppSnackBar.error(context, e.toString().replaceAll('Exception: ', ''));
+                  AppSnackBar.errorDesdeExcepcion(context, e);
                 }
               }
             },
@@ -49,14 +49,6 @@ class _UsersListScreenState extends ConsumerState<UsersListScreen> {
         ],
       ),
     );
-  }
-
-  Color _rolColor(RoleType role) {
-    switch (role) {
-      case RoleType.SUPER_ADMIN: return Colors.deepPurple;
-      case RoleType.ADMIN: return Colors.blueAccent;
-      case RoleType.USER: return Colors.green;
-    }
   }
 
   @override
@@ -83,7 +75,7 @@ class _UsersListScreenState extends ConsumerState<UsersListScreen> {
               const SizedBox(height: 5),
               usersAsync.when(
                 loading: () => const Text('Cargando...', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                error: (_, __) => const Text('Error al cargar', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                error: (_, _) => const Text('Error al cargar', style: TextStyle(color: Colors.white70, fontSize: 14)),
                 data: (users) => Text(
                   '${users.length} usuario${users.length == 1 ? '' : 's'} normal${users.length == 1 ? '' : 'es'}',
                   style: const TextStyle(color: Colors.white70, fontSize: 14),
@@ -122,7 +114,7 @@ class _UsersListScreenState extends ConsumerState<UsersListScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.people_outline, size: 64, color: Colors.grey.withOpacity(0.4)),
+                      Icon(Icons.people_outline, size: 64, color: Colors.grey.withValues(alpha: 0.4)),
                       const SizedBox(height: 16),
                       const Text('No hay usuarios normales', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2D3142))),
                     ],
@@ -157,14 +149,14 @@ class _UsersListScreenState extends ConsumerState<UsersListScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Row(
         children: [
           Container(
             width: 44, height: 44,
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.12),
+              color: Colors.green.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Center(
@@ -187,11 +179,11 @@ class _UsersListScreenState extends ConsumerState<UsersListScreen> {
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(color: Colors.green.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
             child: const Text('USER', style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
           ),
           IconButton(
-            icon: Icon(Icons.delete_outline, color: Colors.redAccent.withOpacity(0.6), size: 20),
+            icon: Icon(Icons.delete_outline, color: Colors.redAccent.withValues(alpha: 0.6), size: 20),
             onPressed: () => _confirmarEliminar(usuario),
           ),
         ],

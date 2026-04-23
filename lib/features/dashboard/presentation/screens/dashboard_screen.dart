@@ -7,6 +7,8 @@ import '../../../reminders/domain/recordatorio_model.dart';
 import '../../../reminders/presentation/providers/reminders_provider.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import 'package:notes_app/features/settings/presentation/providers/settings_provider.dart';
+import 'package:notes_app/core/utils/note_preview.dart';
+import 'package:notes_app/features/dashboard/presentation/screens/main_layout.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -70,8 +72,8 @@ class DashboardScreen extends ConsumerWidget {
                       width: 50, height: 50,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.2),
-                        border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+                        color: Colors.white.withValues(alpha: 0.2),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 2),
                       ),
                       child: Center(
                         child: Text(inicial,
@@ -84,7 +86,7 @@ class DashboardScreen extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(_saludo(),
-                            style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13)),
+                            style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13)),
                           Text(nombre,
                             style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                             maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -94,9 +96,9 @@ class DashboardScreen extends ConsumerWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.18),
+                        color: Colors.white.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white.withOpacity(0.3)),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
                       ),
                       child: Text(_fecha(DateTime.now()),
                         style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
@@ -116,7 +118,7 @@ class DashboardScreen extends ConsumerWidget {
                     color: Theme.of(context).colorScheme.surfaceContainerLowest,
                     borderRadius: BorderRadius.circular(28),
                     border: Border.all(
-                      color: const Color(0xFFE8B237).withOpacity(0.8),
+                      color: const Color(0xFFE8B237).withValues(alpha: 0.8),
                       width: 1.7,
                     ),
                   ),
@@ -125,23 +127,23 @@ class DashboardScreen extends ConsumerWidget {
                       _buildStat(
                         label: 'Notas',
                         value: notesAsync.when(data: (n) => '${n.length}',
-                            loading: () => '…', error: (_, __) => '0'),
+                            loading: () => '…', error: (_, _) => '0'),
                         color: Colors.blueAccent,
                       ),
-                      Container(width: 1, height: 40, color: Colors.grey.withOpacity(0.15)),
+                      Container(width: 1, height: 40, color: Colors.grey.withValues(alpha: 0.15)),
                       _buildStat(
                         label: 'Pendientes',
                         value: remindersAsync.when(
                             data: (r) => '${r.where((x) => !x.completado).length}',
-                            loading: () => '…', error: (_, __) => '0'),
+                            loading: () => '…', error: (_, _) => '0'),
                         color: Colors.orange,
                       ),
-                      Container(width: 1, height: 40, color: Colors.grey.withOpacity(0.15)),
+                      Container(width: 1, height: 40, color: Colors.grey.withValues(alpha: 0.15)),
                       _buildStat(
                         label: 'Completados',
                         value: remindersAsync.when(
                             data: (r) => '${r.where((x) => x.completado).length}',
-                            loading: () => '…', error: (_, __) => '0'),
+                            loading: () => '…', error: (_, _) => '0'),
                         color: const Color(0xFF4CAF50),
                       ),
                     ],
@@ -164,7 +166,8 @@ class DashboardScreen extends ConsumerWidget {
                 // ── NOTAS RECIENTES ─────────────────────────
                 _sectionHeader(
                   label: 'Notas recientes',
-                  onVerTodas: () {},
+                  onVerTodas: () =>
+                      ref.read(selectedTabProvider.notifier).set(1),
                 ),
                 const SizedBox(height: 12),
 
@@ -198,7 +201,8 @@ class DashboardScreen extends ConsumerWidget {
                 // ── PRÓXIMOS RECORDATORIOS ──────────────────
                 _sectionHeader(
                   label: 'Próximos recordatorios',
-                  onVerTodas: () {},
+                  onVerTodas: () =>
+                      ref.read(selectedTabProvider.notifier).set(2),
                 ),
                 const SizedBox(height: 12),
 
@@ -255,7 +259,7 @@ class DashboardScreen extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(value,
@@ -297,9 +301,9 @@ class DashboardScreen extends ConsumerWidget {
       ),
       child: Column(
         children: [
-          Icon(icon, color: cs.onSurface.withOpacity(0.2), size: 36),
+          Icon(icon, color: cs.onSurface.withValues(alpha: 0.2), size: 36),
           const SizedBox(height: 8),
-          Text(texto, style: TextStyle(color: cs.onSurface.withOpacity(0.45), fontSize: 13)),
+          Text(texto, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.45), fontSize: 13)),
         ],
       ),
     );
@@ -332,16 +336,16 @@ class DashboardScreen extends ConsumerWidget {
                   maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: cs.onSurface)),
                 const SizedBox(height: 4),
-                Text(nota.contenido,
+                Text(previewContenidoNota(nota.contenido),
                   maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 12)),
+                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 12)),
               ],
             ),
           ),
           const SizedBox(width: 10),
           if (nota.fechaCreacion != null)
             Text(_hora(nota.fechaCreacion!),
-              style: TextStyle(color: cs.onSurface.withOpacity(0.45), fontSize: 11)),
+              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.45), fontSize: 11)),
         ],
       ),
     );
@@ -364,7 +368,7 @@ class DashboardScreen extends ConsumerWidget {
           Container(
             width: 42, height: 42,
             decoration: BoxDecoration(
-              color: badgeColor.withOpacity(0.10),
+              color: badgeColor.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(13),
             ),
             child: Icon(Icons.alarm_rounded, color: badgeColor, size: 20),
@@ -379,7 +383,7 @@ class DashboardScreen extends ConsumerWidget {
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: cs.onSurface)),
                 const SizedBox(height: 3),
                 Text('${_fecha(rec.fecha)} · ${_hora(rec.fecha)}',
-                  style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 12)),
+                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 12)),
               ],
             ),
           ),
@@ -387,7 +391,7 @@ class DashboardScreen extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: badgeColor.withOpacity(0.10),
+              color: badgeColor.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(_tiempoRestante(rec.fecha),

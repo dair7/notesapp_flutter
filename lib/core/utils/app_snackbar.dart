@@ -1,11 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:notes_app/core/utils/excepciones.dart';
 
 class AppSnackBar {
+  // Referencia global al NavigatorKey — se asigna en main.dart
+  static GlobalKey<NavigatorState>? navKey;
+
   static void exito(BuildContext context, String mensaje) =>
       _mostrar(context, mensaje, esError: false);
 
   static void error(BuildContext context, String mensaje) =>
       _mostrar(context, mensaje, esError: true);
+
+  /// Muestra el error de una excepción.
+  /// Si es [SinConexionException] no hace nada (el toast global ya fue mostrado por ApiClient).
+  static void errorDesdeExcepcion(BuildContext context, dynamic e) {
+    if (e is SinConexionException) return;
+    _mostrar(context, e.toString().replaceAll('Exception: ', ''), esError: true);
+  }
+
+  // Muestra un toast de error sin necesitar BuildContext (usa navKey)
+  static void errorGlobal(String mensaje) {
+    final context = navKey?.currentContext;
+    if (context == null) return;
+    _mostrar(context, mensaje, esError: true);
+  }
+
+  static void exitoGlobal(String mensaje) {
+    final context = navKey?.currentContext;
+    if (context == null) return;
+    _mostrar(context, mensaje, esError: false);
+  }
 
   static void conDeshacer(BuildContext context, String mensaje, VoidCallback onDeshacer) {
     final overlay = Overlay.of(context);
@@ -127,7 +151,7 @@ class _ToastOverlayState extends State<_ToastOverlay>
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.12),
+                        color: Colors.black.withValues(alpha: 0.12),
                         blurRadius: 16,
                         offset: const Offset(0, 4),
                       ),
@@ -139,7 +163,7 @@ class _ToastOverlayState extends State<_ToastOverlay>
                         width: 34,
                         height: 34,
                         decoration: BoxDecoration(
-                          color: color.withOpacity(0.1),
+                          color: color.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(

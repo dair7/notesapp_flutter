@@ -10,11 +10,13 @@ import 'core/presentation/screens/splash_screen.dart';
 
 import 'package:flutter/services.dart';
 import 'core/services/notification_service.dart';
+import 'core/utils/app_snackbar.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  AppSnackBar.navKey = navigatorKey; // toasts globales desde ApiClient
   await NotificationService.inicializar(navKey: navigatorKey);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

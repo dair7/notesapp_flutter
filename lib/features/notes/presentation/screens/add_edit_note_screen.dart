@@ -14,73 +14,127 @@ import 'package:notes_app/features/notes/presentation/providers/notes_provider.d
 import 'package:notes_app/features/reminders/presentation/screens/add_reminder_screen.dart';
 import 'package:share_plus/share_plus.dart';
 
-// ── Rango de texto en negrita ────────────────────────────────
+// ── Rango de texto con formato ───────────────────────────────
 class _Rango {
   final int inicio;
   final int fin;
   const _Rango(this.inicio, this.fin);
 }
 
-// ── Controller con negrita inline por selección o cursor ─────
+// ── Controller con negrita y resaltado inline por selección o cursor ──
 class _RichController extends TextEditingController {
-  final List<_Rango> _negrita = [];
-  bool _cursorNegrita = false;
+  final List<_Rango> _negrita   = [];
+  final List<_Rango> _resaltado = [];
+  bool _cursorNegrita   = false;
+  bool _cursorResaltado = false;
 
-  bool get cursorNegrita => _cursorNegrita;
-  List<_Rango> get rangos => List.unmodifiable(_negrita);
+  bool get cursorNegrita   => _cursorNegrita;
+  bool get cursorResaltado => _cursorResaltado;
+  List<_Rango> get rangos          => List.unmodifiable(_negrita);
+  List<_Rango> get rangosResaltado => List.unmodifiable(_resaltado);
 
-  void toggleNegrita() {
+  // ── Toggle de formatos ────────────────────────────────────
+  void toggleNegrita() => _toggleFormato(
+        _negrita,
+        () => _cursorNegrita = !_cursorNegrita,
+        (bo) => _negrita.any((r) => r.inicio < bo && bo < r.fin),
+        (r) { _quitar(_negrita, r.inicio, r.fin); _cursorNegrita = false; },
+        () => _cursorNegrita = false,
+      );
+
+  void toggleResaltado() => _toggleFormato(
+        _resaltado,
+        () => _cursorResaltado = !_cursorResaltado,
+        (bo) => _resaltado.any((r) => r.inicio < bo && bo < r.fin),
+        (r) { _quitar(_resaltado, r.inicio, r.fin); _cursorResaltado = false; },
+        () => _cursorResaltado = false,
+      );
+
+  // bo = baseOffset del cursor
+  // dentroDeSpan: true si cursor está estrictamente dentro (no en los bordes)
+  // quitarSpan: elimina el span encontrado
+  // desactivarCursor: apaga el modo cursor
+  void _toggleFormato(
+    List<_Rango> lista,
+    void Function() flipCursor,
+    bool Function(int bo) dentroDeSpan,
+    void Function(_Rango r) quitarSpan,
+    void Function() desactivarCursor,
+  ) {
     final sel = selection;
     if (sel.isCollapsed) {
-      _cursorNegrita = !_cursorNegrita;
+      final bo = sel.baseOffset;
+      _Rango? spanActual;
+      for (final r in lista) {
+        if (r.inicio < bo && bo < r.fin) { spanActual = r; break; }
+      }
+      if (spanActual != null) {
+        // Cursor estrictamente dentro del span → quitarlo
+        quitarSpan(spanActual);
+      } else {
+        // Cursor en el borde o fuera → alternar modo cursor
+        flipCursor();
+      }
       notifyListeners();
       return;
     }
-    if (_rangoCubierto(sel.start, sel.end)) {
-      _quitarEnRango(sel.start, sel.end);
+    // Con selección: aplicar/quitar formato y desactivar modo cursor
+    if (_listaCubre(lista, sel.start, sel.end)) {
+      _quitar(lista, sel.start, sel.end);
     } else {
-      _agregarEnRango(sel.start, sel.end);
+      _agregar(lista, sel.start, sel.end);
     }
+    desactivarCursor();
     notifyListeners();
   }
 
+  // ── Consultas de estado ───────────────────────────────────
   bool esCursorNegrita() {
     final sel = selection;
-    if (sel.isCollapsed) return _cursorNegrita || _posEnNegrita(sel.baseOffset - 1);
-    return _rangoCubierto(sel.start, sel.end);
+    final bo = sel.baseOffset;
+    if (sel.isCollapsed) return _cursorNegrita   || _negrita  .any((r) => r.inicio < bo && bo < r.fin);
+    return _listaCubre(_negrita, sel.start, sel.end);
   }
 
-  bool _posEnNegrita(int pos) =>
-      pos >= 0 && _negrita.any((r) => r.inicio <= pos && pos < r.fin);
+  bool esCursorResaltado() {
+    final sel = selection;
+    final bo = sel.baseOffset;
+    if (sel.isCollapsed) return _cursorResaltado || _resaltado.any((r) => r.inicio < bo && bo < r.fin);
+    return _listaCubre(_resaltado, sel.start, sel.end);
+  }
 
-  bool _rangoCubierto(int start, int end) {
+  bool _posEn(List<_Rango> lista, int pos) =>
+      pos >= 0 && lista.any((r) => r.inicio <= pos && pos < r.fin);
+
+  bool _listaCubre(List<_Rango> lista, int start, int end) {
     if (end <= start) return false;
     for (int i = start; i < end; i++) {
-      if (!_posEnNegrita(i)) return false;
+      if (!_posEn(lista, i)) return false;
     }
     return true;
   }
 
-  void _agregarEnRango(int start, int end) {
-    _quitarEnRango(start, end);
-    _negrita.add(_Rango(start, end));
-    _ordenarYFusionar();
+  // ── Manipulación de rangos ────────────────────────────────
+  void _agregar(List<_Rango> lista, int start, int end) {
+    _quitar(lista, start, end);
+    lista.add(_Rango(start, end));
+    _fusionar(lista);
   }
 
-  void _quitarEnRango(int start, int end) {
+  void _quitar(List<_Rango> lista, int start, int end) {
     final res = <_Rango>[];
-    for (final r in _negrita) {
+    for (final r in lista) {
       if (r.fin <= start || r.inicio >= end) { res.add(r); continue; }
       if (r.inicio < start) res.add(_Rango(r.inicio, start));
-      if (r.fin > end) res.add(_Rango(end, r.fin));
+      if (r.fin > end)      res.add(_Rango(end, r.fin));
     }
-    _negrita..clear()..addAll(res);
+    lista..clear()..addAll(res);
   }
 
-  void _ordenarYFusionar() {
-    _negrita.sort((a, b) => a.inicio.compareTo(b.inicio));
+  void _fusionar(List<_Rango> lista) {
+    lista.sort((a, b) => a.inicio.compareTo(b.inicio));
     final res = <_Rango>[];
-    for (final r in _negrita) {
+    for (final r in lista) {
       if (res.isNotEmpty && r.inicio <= res.last.fin) {
         final l = res.removeLast();
         res.add(_Rango(l.inicio, r.fin > l.fin ? r.fin : l.fin));
@@ -88,125 +142,220 @@ class _RichController extends TextEditingController {
         res.add(r);
       }
     }
-    _negrita..clear()..addAll(res);
+    lista..clear()..addAll(res);
   }
 
+  // ── Ajuste de rangos al editar ────────────────────────────
   @override
   set value(TextEditingValue nv) {
     final oldText = text;
     final newText = nv.text;
-    if (newText != oldText && (_negrita.isNotEmpty || _cursorNegrita)) {
+    if (newText != oldText &&
+        (_negrita.isNotEmpty || _resaltado.isNotEmpty ||
+         _cursorNegrita || _cursorResaltado)) {
       _ajustarRangos(oldText, newText);
     }
     super.value = nv;
   }
 
   void _ajustarRangos(String oldText, String newText) {
-    if (newText.isEmpty) { _negrita.clear(); return; }
+    if (newText.isEmpty) { _negrita.clear(); _resaltado.clear(); return; }
     int start = 0;
     while (start < oldText.length && start < newText.length &&
-        oldText[start] == newText[start]) start++;
+        oldText[start] == newText[start]) { start++; }
     final delta = newText.length - oldText.length;
     if (delta == 0) return;
 
-    if (delta > 0) {
-      for (int i = 0; i < _negrita.length; i++) {
-        final r = _negrita[i];
-        _negrita[i] = _Rango(
-          r.inicio > start ? r.inicio + delta : r.inicio,
-          r.fin >= start   ? r.fin   + delta : r.fin,
-        );
+    void ajustar(List<_Rango> lista, bool cursorActivo) {
+      if (delta > 0) {
+        for (int i = 0; i < lista.length; i++) {
+          final r = lista[i];
+          lista[i] = _Rango(
+            r.inicio > start ? r.inicio + delta : r.inicio,
+            r.fin    >  start ? r.fin   + delta : r.fin,
+          );
+        }
+        if (cursorActivo) _agregar(lista, start, start + delta);
+      } else {
+        final deleteEnd = start - delta;
+        _quitar(lista, start, deleteEnd);
+        for (int i = 0; i < lista.length; i++) {
+          final r = lista[i];
+          lista[i] = _Rango(
+            (r.inicio > deleteEnd ? r.inicio + delta : r.inicio).clamp(0, newText.length),
+            (r.fin    > deleteEnd ? r.fin    + delta : r.fin   ).clamp(0, newText.length),
+          );
+        }
+        lista.removeWhere((r) => r.inicio >= r.fin);
       }
-      if (_cursorNegrita) _agregarEnRango(start, start + delta);
-    } else {
-      final deleteEnd = start - delta;
-      _quitarEnRango(start, deleteEnd);
-      for (int i = 0; i < _negrita.length; i++) {
-        final r = _negrita[i];
-        final ni = (r.inicio > deleteEnd ? r.inicio + delta : r.inicio).clamp(0, newText.length);
-        final nf = (r.fin    > deleteEnd ? r.fin    + delta : r.fin   ).clamp(0, newText.length);
-        _negrita[i] = _Rango(ni, nf);
-      }
-      _negrita.removeWhere((r) => r.inicio >= r.fin);
     }
+
+    ajustar(_negrita,   _cursorNegrita);
+    ajustar(_resaltado, _cursorResaltado);
   }
 
-  // Fusionar con el bloque anterior preservando rangos
-  void fusionarConAnterior(String textoPrevio, List<_Rango> rangosPrevio) {
-    final desplazados = _negrita
-        .map((r) => _Rango(r.inicio + textoPrevio.length, r.fin + textoPrevio.length))
-        .toList();
-    _negrita..clear()..addAll(rangosPrevio)..addAll(desplazados);
-    _ordenarYFusionar();
+  // ── Fusión con bloque anterior preservando ambos formatos ──
+  void fusionarConAnterior(
+    String textoPrevio,
+    List<_Rango> prevNegrita,
+    List<_Rango> prevResaltado,
+  ) {
+    final offset = textoPrevio.length;
+
+    final desN = _negrita  .map((r) => _Rango(r.inicio + offset, r.fin + offset)).toList();
+    _negrita  ..clear()..addAll(prevNegrita)  ..addAll(desN);
+    _fusionar(_negrita);
+
+    final desR = _resaltado.map((r) => _Rango(r.inicio + offset, r.fin + offset)).toList();
+    _resaltado..clear()..addAll(prevResaltado)..addAll(desR);
+    _fusionar(_resaltado);
+
     super.value = TextEditingValue(
       text: textoPrevio + text,
-      selection: TextSelection.collapsed(offset: textoPrevio.length),
+      selection: TextSelection.collapsed(offset: offset),
     );
   }
 
+  // ── Renderizado de spans (negrita + resaltado + región IME) ──
   @override
   TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
-    if (_negrita.isEmpty || text.isEmpty) return TextSpan(style: style, text: text);
-    final spans = <InlineSpan>[];
-    int pos = 0;
-    final sorted = List<_Rango>.from(_negrita)..sort((a, b) => a.inicio.compareTo(b.inicio));
-    for (final r in sorted) {
-      final ini = r.inicio.clamp(0, text.length);
-      final fin = r.fin.clamp(ini, text.length);
-      if (ini > pos) spans.add(TextSpan(style: style, text: text.substring(pos, ini)));
-      if (ini < fin) {
-        spans.add(TextSpan(
-          style: (style ?? const TextStyle()).copyWith(fontWeight: FontWeight.bold),
-          text: text.substring(ini, fin),
-        ));
-        pos = fin;
-      }
+    final hasComposing = withComposing && value.isComposingRangeValid;
+
+    final needsCursorFormat = (_cursorNegrita || _cursorResaltado) && hasComposing;
+    if ((_negrita.isEmpty && _resaltado.isEmpty) && !hasComposing && !needsCursorFormat) {
+      return TextSpan(style: style, text: text);
     }
-    if (pos < text.length) spans.add(TextSpan(style: style, text: text.substring(pos)));
+
+    // Recolectar puntos de corte: formatos + región de composición IME
+    final Set<int> cortes = {0, text.length};
+    for (final r in _negrita)   { cortes.add(r.inicio.clamp(0, text.length)); cortes.add(r.fin.clamp(0, text.length)); }
+    for (final r in _resaltado) { cortes.add(r.inicio.clamp(0, text.length)); cortes.add(r.fin.clamp(0, text.length)); }
+    if (hasComposing) {
+      cortes.add(value.composing.start.clamp(0, text.length));
+      cortes.add(value.composing.end.clamp(0, text.length));
+    }
+    final puntos = cortes.toList()..sort();
+
+    // Caso simple: un solo segmento → span plano (evita que Flutter pierda el cursor)
+    if (puntos.length == 2 && !hasComposing) {
+      final esBold = _posEn(_negrita,   0);
+      final esHigh = _posEn(_resaltado, 0);
+      return TextSpan(
+        text: text,
+        style: (style ?? const TextStyle()).copyWith(
+          fontWeight:      esBold ? FontWeight.bold : null,
+          backgroundColor: esHigh ? const Color(0xFFFFEB3B).withValues(alpha: 0.7) : null,
+        ),
+      );
+    }
+
+    final spans = <InlineSpan>[];
+    for (int i = 0; i < puntos.length - 1; i++) {
+      final s = puntos[i], e = puntos[i + 1];
+      if (s >= e) continue;
+
+      final esComposing = hasComposing &&
+          value.composing.start <= s && e <= value.composing.end;
+      final esBold = _posEn(_negrita,   s) || (_cursorNegrita   && esComposing);
+      final esHigh = _posEn(_resaltado, s) || (_cursorResaltado && esComposing);
+
+      spans.add(TextSpan(
+        text: text.substring(s, e),
+        style: (style ?? const TextStyle()).copyWith(
+          fontWeight:      esBold ? FontWeight.bold : null,
+          backgroundColor: esHigh ? const Color(0xFFFFEB3B).withValues(alpha: 0.7) : null,
+          decoration: esComposing && !esBold && !esHigh ? TextDecoration.underline : null,
+        ),
+      ));
+    }
     return TextSpan(style: style, children: spans);
   }
 
-  // Serializar con marcadores **...** para persistencia
+  // ── Serialización: **negrita**, ==resaltado== ─────────────
   String textoConFormato() {
-    if (_negrita.isEmpty) return text;
-    final sorted = List<_Rango>.from(_negrita)..sort((a, b) => a.inicio.compareTo(b.inicio));
+    if (_negrita.isEmpty && _resaltado.isEmpty) return text;
+
+    // Eventos: (posición, marcadorAbrir, marcadorCerrar)
+    // Usamos un recorrido por puntos de corte igual que buildTextSpan
+    final Set<int> cortes = {0, text.length};
+    for (final r in _negrita)   { cortes.add(r.inicio.clamp(0, text.length)); cortes.add(r.fin.clamp(0, text.length)); }
+    for (final r in _resaltado) { cortes.add(r.inicio.clamp(0, text.length)); cortes.add(r.fin.clamp(0, text.length)); }
+    final puntos = cortes.toList()..sort();
+
     final buf = StringBuffer();
-    int pos = 0;
-    for (final r in sorted) {
-      final ini = r.inicio.clamp(0, text.length);
-      final fin = r.fin.clamp(ini, text.length);
-      if (ini > pos) buf.write(text.substring(pos, ini));
-      if (ini < fin) {
-        buf.write('**'); buf.write(text.substring(ini, fin)); buf.write('**');
-        pos = fin;
-      }
+    bool boldAbierto = false, highAbierto = false;
+
+    for (int i = 0; i < puntos.length - 1; i++) {
+      final s = puntos[i], e = puntos[i + 1];
+      if (s >= e) continue;
+      final esBold = _posEn(_negrita,   s);
+      final esHigh = _posEn(_resaltado, s);
+
+      // Cerrar formatos que ya no aplican
+      if (highAbierto && !esHigh) { buf.write('=='); highAbierto = false; }
+      if (boldAbierto && !esBold) { buf.write('**'); boldAbierto = false; }
+      // Abrir formatos nuevos
+      if (esBold && !boldAbierto) { buf.write('**'); boldAbierto = true; }
+      if (esHigh && !highAbierto) { buf.write('=='); highAbierto = true; }
+
+      buf.write(text.substring(s, e));
     }
-    if (pos < text.length) buf.write(text.substring(pos));
+    // Cerrar lo que quede abierto
+    if (boldAbierto) buf.write('**');
+    if (highAbierto) buf.write('==');
+
     return buf.toString();
+  }
+
+  // Carga texto plano y rangos de formato directamente (sin marcadores).
+  // Usado al dividir un bloque en varios (p.ej. al crear un checklist en
+  // una línea intermedia) para preservar negrita/resaltado de cada parte.
+  void cargarConRangos(
+    String textoPlano,
+    List<_Rango> negrita,
+    List<_Rango> resaltado,
+  ) {
+    _negrita..clear()..addAll(negrita);
+    _resaltado..clear()..addAll(resaltado);
+    _cursorNegrita   = false;
+    _cursorResaltado = false;
+    super.value = TextEditingValue(text: textoPlano);
   }
 
   void cargarDesde(String textoFormateado) {
     _negrita.clear();
-    _cursorNegrita = false;
-    if (!textoFormateado.contains('**')) {
+    _resaltado.clear();
+    _cursorNegrita   = false;
+    _cursorResaltado = false;
+
+    if (!textoFormateado.contains('**') && !textoFormateado.contains('==')) {
       super.value = TextEditingValue(text: textoFormateado);
       return;
     }
+
     final buf = StringBuffer();
     int i = 0, realPos = 0;
+    bool enBold = false, enHigh = false;
+    int boldIni = 0, highIni = 0;
+
     while (i < textoFormateado.length) {
+      // Detectar marcador de negrita **
       if (i + 1 < textoFormateado.length &&
           textoFormateado[i] == '*' && textoFormateado[i + 1] == '*') {
         i += 2;
-        final ini = realPos;
-        while (i < textoFormateado.length) {
-          if (i + 1 < textoFormateado.length &&
-              textoFormateado[i] == '*' && textoFormateado[i + 1] == '*') { i += 2; break; }
-          buf.write(textoFormateado[i++]); realPos++;
-        }
-        if (realPos > ini) _negrita.add(_Rango(ini, realPos));
-      } else {
-        buf.write(textoFormateado[i++]); realPos++;
+        if (!enBold) { boldIni = realPos; enBold = true; }
+        else { if (realPos > boldIni) _negrita.add(_Rango(boldIni, realPos)); enBold = false; }
+      }
+      // Detectar marcador de resaltado ==
+      else if (i + 1 < textoFormateado.length &&
+          textoFormateado[i] == '=' && textoFormateado[i + 1] == '=') {
+        i += 2;
+        if (!enHigh) { highIni = realPos; enHigh = true; }
+        else { if (realPos > highIni) _resaltado.add(_Rango(highIni, realPos)); enHigh = false; }
+      }
+      else {
+        buf.write(textoFormateado[i++]);
+        realPos++;
       }
     }
     super.value = TextEditingValue(text: buf.toString());
@@ -239,10 +388,20 @@ class _Bloque {
     this.imagenMitad = false,
     String comentario = '',
     this.mostrarComentario = false,
-  })  : ctrl = _RichController()..cargarDesde(texto),
+    // Si se proveen, [texto] se interpreta como texto plano y los rangos se
+    // aplican directamente. Sin rangos, [texto] se parsea como formato `**` / `==`.
+    List<_Rango>? negritaRangos,
+    List<_Rango>? resaltadoRangos,
+  })  : ctrl = _RichController(),
         focus = FocusNode(),
         comentarioCtrl = TextEditingController(text: comentario),
-        comentarioFocus = FocusNode();
+        comentarioFocus = FocusNode() {
+    if (negritaRangos != null || resaltadoRangos != null) {
+      ctrl.cargarConRangos(texto, negritaRangos ?? const [], resaltadoRangos ?? const []);
+    } else {
+      ctrl.cargarDesde(texto);
+    }
+  }
 
   void dispose() {
     ctrl.dispose();
@@ -268,19 +427,26 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
   final TextEditingController _etiquetaController = TextEditingController();
   late List<_Bloque> _bloques;
 
-  bool _isLoading = false;
-  bool _merging = false; // guard para evitar fusiones re-entrantes
+  bool _merging    = false; // guard para evitar fusiones re-entrantes
+  bool _fusionando = false; // evita que didChangeMetrics llame unfocus() durante merge
   List<String> _etiquetas = [];
   final ImagePicker _picker = ImagePicker();
   _Bloque? _comentarioActivo; // bloque cuyo comentario está siendo editado
   OverlayEntry? _overlayEntry; // barra flotante de imagen activa
+  _Bloque? _bloqueConOverlay;  // imagen actualmente seleccionada (borde amarillo)
   final ScrollController _scrollController = ScrollController();
+
+  // Estado de sincronización con el servidor
+  _EstadoSync _estadoSync = _EstadoSync.sincronizado;
+  bool _isDisposed = false; // evita setState durante el desmontaje
+  Timer? _timerReintento;
+  int? _idNotaCreada; // id asignado por el servidor tras el primer auto-guardado
+  bool _errorMostrado = false; // evita mostrar el toast en cada reintento
   bool _modoEnfocado = false;
   // Índice del último bloque enfocado (capturado antes de que el tap robe el foco)
   int _ultimoBloqueIdx = 0;
 
-  // Formato global del contenido (negrita es ahora inline por bloque)
-  bool _resaltado = false;
+  // Formato global del contenido
   double _tamanoFuente = 16.0;
   static const double _tamanoMin = 12.0;
   static const double _tamanoMax = 24.0;
@@ -288,6 +454,10 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
   // Contador (actualizado con debounce para no hacer rebuild en cada tecla)
   final _contadorNotifier = ValueNotifier<String>('');
   Timer? _debounceContador;
+
+  // Auto guardado
+  Timer? _debounceGuardado;
+  bool _guardadoAutomatico = false; // true si ya fue creada por auto guardado
 
   // ── Metadatos de formato (negrita, resaltado, tamaño fuente) ─
   void _cargarFormato(String raw) {
@@ -298,7 +468,6 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
       final kv = parte.split('=');
       if (kv.length != 2) continue;
       switch (kv[0]) {
-        case 'r': _resaltado = kv[1] == '1'; break;
         case 'fs': _tamanoFuente = double.tryParse(kv[1]) ?? 16.0; break;
       }
     }
@@ -325,7 +494,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
   }
 
   String _serializarConFormato() {
-    final meta = '[fmt:b=0,r=${_resaltado ? 1 : 0},fs=${_tamanoFuente.toInt()}]';
+    final meta = '[fmt:b=0,r=0,fs=${_tamanoFuente.toInt()}]';
     return '$meta\n${_serializar()}';
   }
 
@@ -409,6 +578,83 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
       _contadorNotifier.value =
           '$words ${words == 1 ? 'palabra' : 'palabras'} · $chars caracteres';
     });
+    // Programar auto guardado 3s después de la última tecla
+    _programarAutoGuardado();
+  }
+
+  // ── Auto guardado con debounce corto (texto mientras se escribe) ─
+  void _programarAutoGuardado() {
+    _debounceGuardado?.cancel();
+    _debounceGuardado = Timer(const Duration(milliseconds: 600), () {
+      if (mounted) _ejecutarAutoGuardado();
+    });
+  }
+
+  // ── Guardado inmediato sin debounce (imágenes) ───────────────
+  void _guardarInmediato() {
+    _debounceGuardado?.cancel();
+    if (mounted) _ejecutarAutoGuardado();
+  }
+
+  // ── Guardado con debounce corto (título: evita llamada por cada tecla) ─
+  void _programarAutoGuardadoTitulo() {
+    _debounceGuardado?.cancel();
+    _debounceGuardado = Timer(const Duration(milliseconds: 600), () {
+      if (mounted) _ejecutarAutoGuardado();
+    });
+  }
+
+  Future<void> _ejecutarAutoGuardado() async {
+    final titulo = _tituloController.text.trim();
+    final textoPlano = _serializar().trim();
+    if (titulo.isEmpty && textoPlano.isEmpty) return;
+    // Evitar llamadas simultáneas
+    if (_estadoSync == _EstadoSync.guardando) return;
+
+    // Solo actualizar UI si el widget sigue montado (no llamar setState durante dispose)
+    if (!_isDisposed && mounted) setState(() => _estadoSync = _EstadoSync.guardando);
+    _timerReintento?.cancel();
+
+    try {
+      final esEdicion = widget.notaToEdit != null || _guardadoAutomatico;
+      final nota = Nota(
+        id: esEdicion ? (widget.notaToEdit?.id ?? _idNotaCreada) : null,
+        titulo: titulo.isEmpty ? 'Sin título' : titulo,
+        contenido: _serializarConFormato(),
+        fechaCreacion: widget.notaToEdit?.fechaCreacion ?? DateTime.now(),
+        estado: widget.notaToEdit?.estado ?? EstadoNoteType.ACTIVA,
+        color: null,
+        etiquetas: _etiquetas,
+      );
+      if (esEdicion) {
+        await ref.read(notesProvider.notifier).updateNota(nota);
+      } else {
+        final notaCreada = await ref.read(notesProvider.notifier).addNota(nota);
+        _idNotaCreada = notaCreada.id;
+        _guardadoAutomatico = true;
+      }
+      if (!_isDisposed && mounted) {
+        setState(() => _estadoSync = _EstadoSync.sincronizado);
+        _errorMostrado = false;
+      }
+    } catch (_) {
+      if (!_isDisposed && mounted) {
+        setState(() => _estadoSync = _EstadoSync.pendiente);
+        if (!_errorMostrado) {
+          _errorMostrado = true;
+          AppSnackBar.error(context, 'Sin conexión — reintentando automáticamente');
+        }
+        _iniciarReintento();
+      }
+    }
+  }
+
+  // Reintenta la sincronización cada 5 segundos hasta lograrlo
+  void _iniciarReintento() {
+    _timerReintento?.cancel();
+    _timerReintento = Timer(const Duration(seconds: 5), () {
+      if (mounted) _ejecutarAutoGuardado();
+    });
   }
 
   // ── Aplica una acción de formato manteniendo el foco (teclado visible) ─
@@ -422,22 +668,109 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
     final bloque = _bloques[idx];
 
     if (bloque.esChecklist) {
-      // Checklist → regular: quitar flag (el texto se une al bloque regular adyacente en el próximo guardado)
+      // Checklist → regular: quitar flag
       setState(() { bloque.esChecklist = false; bloque.hecho = false; });
       return;
     }
 
-    // Regular → checklist: si el bloque tiene varias líneas, dividir cada una en su propio ítem
-    final lineas = bloque.ctrl.text.split('\n');
+    final texto = bloque.ctrl.text;
+    final lineas = texto.split('\n');
+
+    // Bloque con una sola línea → convertir directamente, sin dividir
     if (lineas.length <= 1) {
       setState(() => bloque.esChecklist = true);
       return;
     }
-    final nuevosBloques = lineas.map((l) => _Bloque(texto: l, esChecklist: true)).toList();
+
+    // Bloque con varias líneas: solo convertir la línea donde está el cursor.
+    // Se divide en hasta 3 partes: [texto antes] + [línea actual → checklist] + [texto después]
+    final cursorOffset = bloque.ctrl.selection.baseOffset
+        .clamp(0, texto.length);
+
+    // Capturar los rangos de formato originales ANTES de crear los bloques nuevos
+    // para poder trocearlos por línea y preservar negrita/resaltado en cada parte.
+    final negritaOrig   = List<_Rango>.from(bloque.ctrl.rangos);
+    final resaltadoOrig = List<_Rango>.from(bloque.ctrl.rangosResaltado);
+
+    // Offset de inicio de cada línea dentro del texto completo
+    final offsetsLinea = <int>[];
+    int off = 0;
+    for (final linea in lineas) {
+      offsetsLinea.add(off);
+      off += linea.length + 1; // +1 por el '\n'
+    }
+
+    // Calcular en qué índice de línea está el cursor
+    int lineaIdx = 0;
+    for (int i = 0; i < lineas.length; i++) {
+      final finLinea = offsetsLinea[i] + lineas[i].length;
+      if (cursorOffset <= finLinea) { lineaIdx = i; break; }
+      if (i == lineas.length - 1) lineaIdx = i;
+    }
+    lineaIdx = lineaIdx.clamp(0, lineas.length - 1);
+
+    final nuevos = <_Bloque>[];
+
+    // Parte 1: líneas antes de la línea actual (bloque regular, si existen)
+    if (lineaIdx > 0) {
+      final partText = lineas.sublist(0, lineaIdx).join('\n');
+      final partEnd  = offsetsLinea[lineaIdx] - 1; // excluye el '\n' final
+      nuevos.add(_Bloque(
+        texto: partText,
+        negritaRangos:   _sliceRangos(negritaOrig,   0, partEnd),
+        resaltadoRangos: _sliceRangos(resaltadoOrig, 0, partEnd),
+      ));
+    }
+
+    // Parte 2: línea del cursor → checklist (con formato preservado)
+    final checkFrom = offsetsLinea[lineaIdx];
+    final checkEnd  = checkFrom + lineas[lineaIdx].length;
+    nuevos.add(_Bloque(
+      texto: lineas[lineaIdx],
+      esChecklist: true,
+      negritaRangos:   _sliceRangos(negritaOrig,   checkFrom, checkEnd),
+      resaltadoRangos: _sliceRangos(resaltadoOrig, checkFrom, checkEnd),
+    ));
+
+    // Parte 3: líneas después de la línea actual (bloque regular, si existen)
+    if (lineaIdx < lineas.length - 1) {
+      final afterFrom = offsetsLinea[lineaIdx + 1];
+      final afterText = lineas.sublist(lineaIdx + 1).join('\n');
+      final afterEnd  = afterFrom + afterText.length;
+      nuevos.add(_Bloque(
+        texto: afterText,
+        negritaRangos:   _sliceRangos(negritaOrig,   afterFrom, afterEnd),
+        resaltadoRangos: _sliceRangos(resaltadoOrig, afterFrom, afterEnd),
+      ));
+    }
+
+    // Índice del bloque checklist recién creado para reasignar foco
+    final idxChecklist = idx + (lineaIdx > 0 ? 1 : 0);
+
     setState(() {
       _bloques.removeAt(idx);
-      _bloques.insertAll(idx, nuevosBloques);
+      _bloques.insertAll(idx, nuevos);
     });
+
+    // Devolver el foco al ítem checklist para que el teclado no se cierre
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && idxChecklist < _bloques.length) {
+        _bloques[idxChecklist].focus.requestFocus();
+      }
+    });
+  }
+
+  // Recorta [rangos] al intervalo [from, to] y reajusta los offsets a 0.
+  // Se usa al dividir un bloque multi-línea en sub-bloques para preservar
+  // negrita/resaltado de cada trozo.
+  List<_Rango> _sliceRangos(List<_Rango> rangos, int from, int to) {
+    final result = <_Rango>[];
+    for (final r in rangos) {
+      final s = r.inicio.clamp(from, to);
+      final e = r.fin.clamp(from, to);
+      if (e > s) result.add(_Rango(s - from, e - from));
+    }
+    return result;
   }
 
   bool get _bloqueActualEsChecklist {
@@ -450,19 +783,31 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
     return _bloques[idx].ctrl.esCursorNegrita();
   }
 
+  bool get _resaltadoActivo {
+    final idx = _ultimoBloqueIdx.clamp(0, _bloques.length - 1);
+    return _bloques[idx].ctrl.esCursorResaltado();
+  }
+
   // ── Fusión inversa: solo se usa para ítems checklist.
   // Los bloques regulares nunca necesitan fusionarse porque no se dividen.
   void _fusionarConAnterior(int idx) {
     if (_merging || idx <= 0 || idx >= _bloques.length) return;
-    _merging = true;
+    _merging    = true;
+    _fusionando = true;
     final previo = _bloques[idx - 1];
     final actual = _bloques[idx];
     actual.esChecklist = previo.esChecklist;
     actual.hecho = previo.hecho;
-    actual.ctrl.fusionarConAnterior(previo.ctrl.text, previo.ctrl.rangos);
+    actual.ctrl.fusionarConAnterior(previo.ctrl.text, previo.ctrl.rangos, previo.ctrl.rangosResaltado);
     setState(() => _bloques.removeAt(idx - 1));
+    // Solicitar foco de inmediato (antes del próximo frame) para que el teclado
+    // no tenga tiempo de detectar la pérdida de foco y cerrarse.
     actual.focus.requestFocus();
     _merging = false;
+    // Liberar el guard después del frame para cubrir la ventana de metrics.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fusionando = false;
+    });
   }
 
 
@@ -503,17 +848,30 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
     _actualizarContador();
   }
 
-  // ── Backspace en ítem checklist vacío → fusionar con el anterior.
-  // Solo aplica a checklists; los bloques regulares no necesitan este handler.
   KeyEventResult _onBloqueKeyEvent(int index, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
     if (event.logicalKey != LogicalKeyboardKey.backspace) return KeyEventResult.ignored;
     if (index <= 0 || index >= _bloques.length) return KeyEventResult.ignored;
     final bloque = _bloques[index];
+
+    // Checklist vacío → fusionar con el anterior
     if (bloque.esChecklist && bloque.ctrl.text.isEmpty) {
       _fusionarConAnterior(index);
       return KeyEventResult.handled;
     }
+
+    // Cualquier bloque con cursor en posición 0 → fusionar con el anterior
+    // (permite borrar el checklist de arriba con backspace natural)
+    if (bloque.ctrl.selection.baseOffset == 0 && bloque.ctrl.selection.isCollapsed) {
+      final previo = _bloques[index - 1];
+      if (previo.esImagen) return KeyEventResult.ignored;
+      // Quitar el check del bloque anterior si lo era
+      previo.esChecklist = false;
+      previo.hecho = false;
+      _fusionarConAnterior(index);
+      return KeyEventResult.handled;
+    }
+
     return KeyEventResult.ignored;
   }
 
@@ -555,16 +913,6 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
     setState(() => _modoEnfocado = !_modoEnfocado);
   }
 
-  // ── Etiquetas ───────────────────────────────────────────────
-  void _agregarEtiqueta(String texto) {
-    final tag = texto.trim().toLowerCase();
-    if (tag.isNotEmpty && !_etiquetas.contains(tag) && _etiquetas.length < 5) {
-      setState(() { _etiquetas.add(tag); _etiquetaController.clear(); });
-    } else {
-      _etiquetaController.clear();
-    }
-  }
-
   // ── Modal para elegir fuente de imagen ──────────────────────
   void _mostrarModalImagen() {
     if (_bloques.where((b) => b.esImagen).length >= 5) {
@@ -589,7 +937,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
                 child: Container(
                   width: 36, height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.12),
+                    color: Colors.black.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -642,7 +990,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: c.withOpacity(0.06),
+          color: c.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -685,44 +1033,10 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
         _bloques.add(_Bloque(texto: '', esImagen: true, rutaImagen: rutaFinal));
         _normalizarBloques();
       });
+      // Guardar inmediatamente al agregar una imagen
+      _guardarInmediato();
     } catch (e) {
       if (mounted) AppSnackBar.error(context, 'No se pudo obtener la imagen');
-    }
-  }
-
-  // ── Guardar ─────────────────────────────────────────────────
-  Future<void> _guardarNota() async {
-    final titulo = _tituloController.text.trim();
-    final textoPlano = _serializar().trim();
-    if (titulo.isEmpty && textoPlano.isEmpty) {
-      AppSnackBar.error(context, 'La nota está vacía');
-      return;
-    }
-    setState(() => _isLoading = true);
-    try {
-      final esEdicion = widget.notaToEdit != null;
-      final nota = Nota(
-        id: esEdicion ? widget.notaToEdit!.id : null,
-        titulo: titulo.isEmpty ? 'Sin título' : titulo,
-        contenido: _serializarConFormato(),
-        fechaCreacion: esEdicion ? widget.notaToEdit!.fechaCreacion : DateTime.now(),
-        estado: esEdicion ? widget.notaToEdit!.estado : EstadoNoteType.ACTIVA,
-        color: null,
-        etiquetas: _etiquetas,
-      );
-      if (esEdicion) {
-        await ref.read(notesProvider.notifier).updateNota(nota);
-      } else {
-        await ref.read(notesProvider.notifier).addNota(nota);
-      }
-      if (mounted) {
-        if (_modoEnfocado) SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-        AppSnackBar.exito(context, esEdicion ? 'Nota actualizada' : 'Nota guardada');
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) AppSnackBar.error(context, e.toString().replaceAll('Exception: ', ''));
     }
   }
 
@@ -735,8 +1049,8 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
         .instance.platformDispatcher.views.first.viewInsets.bottom;
     final abierto = bottomInset > 0;
 
-    // Transición visible → oculto: quitar foco
-    if (_prevBottomInset > 0 && bottomInset == 0 && mounted) {
+    // Transición visible → oculto: quitar foco (solo si no estamos fusionando bloques)
+    if (_prevBottomInset > 0 && bottomInset == 0 && mounted && !_fusionando) {
       FocusManager.instance.primaryFocus?.unfocus();
       if (_comentarioActivo != null) {
         setState(() {
@@ -759,6 +1073,8 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _tituloController = TextEditingController(text: widget.notaToEdit?.titulo ?? '');
+    // Guardar 600ms después del último cambio en el título
+    _tituloController.addListener(_programarAutoGuardadoTitulo);
     final contenidoRaw = widget.notaToEdit?.contenido ?? '';
     _cargarFormato(contenidoRaw);
     _bloques = _parsear(_extraerContenido(contenidoRaw));
@@ -774,7 +1090,20 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Guardar cuando la app pasa a segundo plano
+    if (state == AppLifecycleState.paused) _ejecutarAutoGuardado();
+  }
+
+  @override
   void dispose() {
+    _isDisposed = true;
+    _timerReintento?.cancel();
+    _debounceGuardado?.cancel();
+    // Quitar listener antes de dispose para evitar callbacks sobre estado destruido
+    _tituloController.removeListener(_programarAutoGuardadoTitulo);
+    // Guardar al salir: capturar datos antes de destruir los controllers
+    _ejecutarAutoGuardado();
     WidgetsBinding.instance.removeObserver(this);
     _debounceContador?.cancel();
     _contadorNotifier.dispose();
@@ -792,14 +1121,18 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLow,
+      backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? cs.surfaceContainerLowest
+          : Colors.white,
       appBar: _modoEnfocado ? null : _buildAppBar(),
       body: Stack(
         children: [
           Column(
             children: [
               Expanded(child: _buildAreaContenido()),
-              if (!_modoEnfocado && _tecladoVisible)
+              // Mostrar la barra de comentario aunque el teclado aún no esté visible,
+              // para que el TextField esté montado antes de llamar requestFocus()
+              if (!_modoEnfocado && (_tecladoVisible || _comentarioActivo != null))
                 _comentarioActivo != null
                     ? _buildBarraComentario(_comentarioActivo!)
                     : _buildBarraInferior(),
@@ -813,7 +1146,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.inverseSurface.withOpacity(0.85),
+                    color: Theme.of(context).colorScheme.inverseSurface.withValues(alpha: 0.85),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: const Row(mainAxisSize: MainAxisSize.min, children: [
@@ -833,14 +1166,31 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
   PreferredSizeWidget _buildAppBar() {
     final cs = Theme.of(context).colorScheme;
     return AppBar(
-      backgroundColor: cs.surfaceContainerLow,
+      backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? cs.surfaceContainerLowest
+          : Colors.white,
       elevation: 0,
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
       iconTheme: IconThemeData(color: cs.onSurface),
-      title: Text(widget.notaToEdit != null ? 'Editar Nota' : 'Nueva Nota',
-          style: TextStyle(color: cs.onSurface, fontSize: 16)),
       actions: [
+        // Indicador de estado de sincronización
+        if (_estadoSync == _EstadoSync.guardando)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Center(
+              child: SizedBox(
+                width: 16, height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: cs.onSurface.withValues(alpha: 0.4)),
+              ),
+            ),
+          )
+        else if (_estadoSync == _EstadoSync.pendiente)
+          IconButton(
+            icon: const Icon(Icons.cloud_off_rounded, color: Colors.orange),
+            tooltip: 'Sin sincronizar — toca para reintentar',
+            onPressed: _ejecutarAutoGuardado,
+          ),
         IconButton(
           icon: Icon(Icons.share_outlined, color: cs.onSurface),
           tooltip: 'Compartir',
@@ -853,18 +1203,6 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
             onPressed: () => Navigator.push(context, MaterialPageRoute(
                 builder: (_) => AddReminderScreen(notaPreseleccionada: widget.notaToEdit))),
           ),
-        Padding(
-          padding: const EdgeInsets.only(right: 16.0),
-          child: TextButton.icon(
-            onPressed: _isLoading ? null : _guardarNota,
-            icon: _isLoading
-                ? SizedBox(width: 16, height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary))
-                : Icon(Icons.check, color: cs.primary),
-            label: Text('Guardar',
-                style: TextStyle(color: cs.primary, fontWeight: FontWeight.bold, fontSize: 16)),
-          ),
-        ),
       ],
     );
   }
@@ -879,7 +1217,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.only(bottom: 6, left: 14),
             child: TextField(
               controller: _tituloController,
               style: TextStyle(
@@ -899,16 +1237,35 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(bottom: 28),
+            padding: const EdgeInsets.only(bottom: 28, left: 14),
             child: ValueListenableBuilder<String>(
               valueListenable: _contadorNotifier,
-              builder: (_, valor, __) => Text(
+              builder: (_, valor, _) => Text(
                 valor,
-                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withOpacity(0.6)),
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
               ),
             ),
           ),
           ..._bloques.asMap().entries.map((e) => _buildBloque(e.key, e.value)),
+          // Área tappable vacía debajo del contenido
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              final ultimo = _bloques.last;
+              // Si el último bloque es texto regular y está vacío, enfocarlo
+              if (!ultimo.esImagen && !ultimo.esChecklist) {
+                ultimo.focus.requestFocus();
+              } else {
+                // Agregar bloque regular nuevo y enfocarlo
+                final nuevo = _Bloque(texto: '');
+                setState(() => _bloques.add(nuevo));
+                WidgetsBinding.instance.addPostFrameCallback(
+                  (_) => nuevo.focus.requestFocus(),
+                );
+              }
+            },
+            child: const SizedBox(width: double.infinity, height: 200),
+          ),
         ],
       ),
     );
@@ -922,6 +1279,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
     final ancho = bloque.imagenMitad ? halfW : double.infinity;
 
     // Widget de la imagen con comentario (reutilizado en ambos layouts)
+    final seleccionada = _bloqueConOverlay == bloque;
     final imagenContainer = GestureDetector(
       onTap: () => _mostrarBarraFlotante(idx, bloque),
       child: Container(
@@ -929,7 +1287,21 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
         width: ancho,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: cs.outlineVariant, width: 1),
+          border: Border.all(
+            color: seleccionada
+                ? const Color(0xFFE8B237)
+                : cs.outlineVariant,
+            width: seleccionada ? 2.2 : 1,
+          ),
+          boxShadow: seleccionada
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFE8B237).withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(13),
@@ -941,7 +1313,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
                 File(ruta),
                 width: ancho,
                 fit: BoxFit.fitWidth,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   width: ancho, height: 180,
                   color: cs.surfaceContainerHighest,
                   child: Icon(Icons.broken_image_outlined,
@@ -956,10 +1328,10 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
                           bloque.comentarioCtrl.text.isNotEmpty
                       ? Container(
                           decoration: BoxDecoration(
-                            color: cs.primary.withOpacity(0.08),
+                            color: cs.primary.withValues(alpha: 0.08),
                             border: Border(
                               top: BorderSide(
-                                  color: cs.primary.withOpacity(0.2),
+                                  color: cs.primary.withValues(alpha: 0.2),
                                   width: 1),
                             ),
                           ),
@@ -970,7 +1342,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
                             children: [
                               Icon(Icons.notes_rounded,
                                   size: 15,
-                                  color: cs.primary.withOpacity(0.7)),
+                                  color: cs.primary.withValues(alpha: 0.7)),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -1034,6 +1406,8 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
   // ── Barra flotante via Overlay ────────────────────────────────
   void _mostrarBarraFlotante(int idx, _Bloque bloque) {
     _ocultarBarraFlotante();
+    // Marca la imagen seleccionada para mostrar el borde amarillo
+    setState(() => _bloqueConOverlay = bloque);
 
     final box = bloque.imagenKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) return;
@@ -1070,7 +1444,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.18),
+                      color: cs.surfaceContainerLowest.withValues(alpha: 0.18),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -1085,7 +1459,10 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
                         bloque.mostrarComentario = true;
                         _comentarioActivo = bloque;
                       });
-                      Future.microtask(() => bloque.comentarioFocus.requestFocus());
+                      // Esperar al siguiente frame para que el TextField esté montado
+                      WidgetsBinding.instance.addPostFrameCallback(
+                        (_) => bloque.comentarioFocus.requestFocus(),
+                      );
                     }, color: cs.onSurface),
                     _iconoOverlay(Icons.draw_outlined, () {
                       _ocultarBarraFlotante();
@@ -1098,6 +1475,8 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
                       () {
                         _ocultarBarraFlotante();
                         setState(() => bloque.imagenMitad = !bloque.imagenMitad);
+                        // Guardar inmediatamente al cambiar el layout de la imagen
+                        _guardarInmediato();
                       },
                       color: cs.onSurface,
                     ),
@@ -1107,6 +1486,8 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
                         _bloques.removeAt(idx);
                         _normalizarBloques();
                       });
+                      // Guardar inmediatamente al eliminar la imagen
+                      _guardarInmediato();
                     }, color: cs.error),
                   ],
                 ),
@@ -1123,6 +1504,8 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
   void _ocultarBarraFlotante() {
     _overlayEntry?.remove();
     _overlayEntry = null;
+    // Los callers siempre hacen su propio setState; basta con limpiar la variable
+    _bloqueConOverlay = null;
   }
 
   // Garantiza que siempre haya un bloque de texto entre imágenes consecutivas
@@ -1157,20 +1540,6 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
   }
 
 
-  // ── Visor de imagen a pantalla completa ──────────────────────
-  void _verImagenCompleta(String ruta, String heroTag) {
-    Navigator.push(
-      context,
-      PageRouteBuilder(
-        opaque: false,
-        barrierColor: Colors.black,
-        pageBuilder: (_, __, ___) => _VisorImagen(ruta: ruta, heroTag: heroTag),
-        transitionsBuilder: (_, anim, __, child) =>
-            FadeTransition(opacity: anim, child: child),
-      ),
-    );
-  }
-
   // ── Bloque unificado: key DIRECTAMENTE en el TextField para que Flutter
   // preserve la conexión IME cuando el bloque cambia de posición en la lista.
   Widget _buildBloque(int idx, _Bloque bloque) {
@@ -1193,6 +1562,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
             decoration: const BoxDecoration(),
             child: bloque.esChecklist
                 ? GestureDetector(
+                    behavior: HitTestBehavior.deferToChild,
                     onTap: () => setState(() => bloque.hecho = !bloque.hecho),
                     child: Center(
                       child: AnimatedContainer(
@@ -1202,7 +1572,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
                           borderRadius: BorderRadius.circular(4),
                           color: bloque.hecho ? cs.primary : Colors.transparent,
                           border: Border.all(
-                            color: bloque.hecho ? cs.primary : cs.onSurface.withOpacity(0.35),
+                            color: bloque.hecho ? cs.primary : cs.onSurface.withValues(alpha: 0.35),
                             width: 1.6,
                           ),
                         ),
@@ -1225,14 +1595,14 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
               style: TextStyle(
                 fontSize: _tamanoFuente,
                 fontWeight: FontWeight.normal,
-                backgroundColor: _resaltado && !bloque.hecho ? Colors.yellow.withOpacity(0.45) : null,
                 decoration: bloque.hecho ? TextDecoration.lineThrough : TextDecoration.none,
                 decorationColor: cs.onSurfaceVariant,
-                color: bloque.hecho ? cs.onSurface.withOpacity(0.38) : cs.onSurface,
+                color: bloque.hecho ? cs.onSurface.withValues(alpha: 0.38) : cs.onSurface,
                 height: 2.2,
               ),
               maxLines: null,
               keyboardType: TextInputType.multiline,
+              enableInteractiveSelection: true,
               decoration: InputDecoration(
                 hintText: idx == 0 ? 'Empieza a escribir...' : null,
                 hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 16),
@@ -1291,7 +1661,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
             },
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              backgroundColor: cs.primary.withOpacity(0.1),
+              backgroundColor: cs.primary.withValues(alpha: 0.1),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             child: Text(
@@ -1338,7 +1708,11 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
                 setState(() {});
               }, _negritaActiva),
               // Resaltado
-              _toolbarBtnResaltado(() => _aplicarFormato(() => _resaltado = !_resaltado), _resaltado),
+              _toolbarBtnResaltado(() {
+                final idx = _ultimoBloqueIdx.clamp(0, _bloques.length - 1);
+                _bloques[idx].ctrl.toggleResaltado();
+                setState(() {});
+              }, _resaltadoActivo),
               // Separador visual
               Container(width: 1, height: 22, color: Theme.of(context).colorScheme.outlineVariant),
               // Tamaño de fuente
@@ -1370,12 +1744,12 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
         width: 36, height: 36,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: activo ? Theme.of(context).colorScheme.primary.withOpacity(0.13) : Colors.transparent,
+          color: activo ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.13) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(icon, size: 22,
           color: activo ? Theme.of(context).colorScheme.primary
-              : onTap == null ? Theme.of(context).colorScheme.onSurface.withOpacity(0.2)
+              : onTap == null ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2)
               : Theme.of(context).colorScheme.onSurfaceVariant),
       ),
     );
@@ -1406,7 +1780,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
         duration: const Duration(milliseconds: 150),
         width: 36, height: 36, alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: activo ? Theme.of(context).colorScheme.primary.withOpacity(0.13) : Colors.transparent,
+          color: activo ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.13) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Stack(
@@ -1416,7 +1790,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
               bottom: 7,
               child: Container(
                 width: 18, height: 7,
-                color: activo ? Colors.yellow.withOpacity(0.7) : Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+                color: activo ? Colors.yellow.withValues(alpha: 0.7) : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
               ),
             ),
             Text('A', style: TextStyle(
@@ -1436,7 +1810,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
         duration: const Duration(milliseconds: 150),
         width: 36, height: 36, alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: activo ? Theme.of(context).colorScheme.primary.withOpacity(0.13) : Colors.transparent,
+          color: activo ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.13) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text('B', style: TextStyle(
@@ -1456,40 +1830,16 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
         onDeleted: () => setState(() => _etiquetas.remove(tag)),
         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         padding: const EdgeInsets.symmetric(horizontal: 4),
-        backgroundColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.06),
+        backgroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
         side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
       )).toList(),
     );
   }
 
-  Widget _buildInputEtiqueta() {
-    return Row(
-      children: [
-        Icon(Icons.label_outline_rounded, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
-        const SizedBox(width: 8),
-        Expanded(
-          child: TextField(
-            controller: _etiquetaController,
-            style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface),
-            decoration: InputDecoration(
-              hintText: _etiquetas.length >= 5 ? 'Máximo 5 etiquetas' : 'Agregar etiqueta...',
-              hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14),
-              border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero,
-            ),
-            enabled: _etiquetas.length < 5,
-            textCapitalization: TextCapitalization.none,
-            onSubmitted: _agregarEtiqueta,
-          ),
-        ),
-        if (_etiquetaController.text.trim().isNotEmpty)
-          GestureDetector(
-            onTap: () => _agregarEtiqueta(_etiquetaController.text),
-            child: Icon(Icons.add_circle_outline_rounded, size: 20, color: Theme.of(context).colorScheme.primary),
-          ),
-      ],
-    );
-  }
 }
+
+// ── Estados de sincronización con el servidor ────────────────
+enum _EstadoSync { guardando, sincronizado, pendiente }
 
 // ── Visor de imagen a pantalla completa con zoom ─────────────
 class _VisorImagen extends StatefulWidget {
@@ -1505,7 +1855,7 @@ class _VisorImagenState extends State<_VisorImagen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
       body: Stack(
         children: [
           // Imagen con zoom y paneo
@@ -1518,7 +1868,7 @@ class _VisorImagenState extends State<_VisorImagen> {
                 child: Image.file(
                   File(widget.ruta),
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(
+                  errorBuilder: (_, _, _) => const Icon(
                     Icons.broken_image_outlined,
                     color: Colors.white54,
                     size: 64,
@@ -1537,7 +1887,7 @@ class _VisorImagenState extends State<_VisorImagen> {
                   margin: const EdgeInsets.all(12),
                   width: 38, height: 38,
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
+                    color: Colors.black.withValues(alpha: 0.5),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),

@@ -3,18 +3,22 @@ import 'package:flutter/material.dart';
 Future<TimeOfDay?> mostrarTimePickerPersonalizado({
   required BuildContext context,
   required TimeOfDay horaInicial,
+  TimeOfDay? horaMinima, // Solo se pasa cuando la fecha seleccionada es hoy
 }) {
   return showGeneralDialog<TimeOfDay>(
     context: context,
     barrierDismissible: true,
     barrierLabel: '',
-    barrierColor: Colors.black.withOpacity(0.85),
-    pageBuilder: (_, __, ___) => Center(
+    barrierColor: Colors.black.withValues(alpha: 0.85),
+    pageBuilder: (_, _, _) => Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Material(
           color: Colors.transparent,
-          child: _CustomTimePicker(horaInicial: horaInicial),
+          child: _CustomTimePicker(
+            horaInicial: horaInicial,
+            horaMinima: horaMinima,
+          ),
         ),
       ),
     ),
@@ -23,7 +27,12 @@ Future<TimeOfDay?> mostrarTimePickerPersonalizado({
 
 class _CustomTimePicker extends StatefulWidget {
   final TimeOfDay horaInicial;
-  const _CustomTimePicker({required this.horaInicial});
+  final TimeOfDay? horaMinima;
+
+  const _CustomTimePicker({
+    required this.horaInicial,
+    this.horaMinima,
+  });
 
   @override
   State<_CustomTimePicker> createState() => _CustomTimePickerState();
@@ -58,7 +67,17 @@ class _CustomTimePickerState extends State<_CustomTimePicker> {
     super.dispose();
   }
 
+  // Convierte la selección actual a 24h y verifica si supera el mínimo
+  bool get _esValida {
+    if (widget.horaMinima == null) return true;
+    final h24 = _hora % 12 + (_esAm ? 0 : 12);
+    final minH = widget.horaMinima!.hour;
+    final minM = widget.horaMinima!.minute;
+    return h24 > minH || (h24 == minH && _minuto > minM);
+  }
+
   void _confirmar() {
+    if (!_esValida) return;
     int h24 = _hora % 12 + (_esAm ? 0 : 12);
     Navigator.pop(context, TimeOfDay(hour: h24, minute: _minuto));
   }
@@ -71,7 +90,7 @@ class _CustomTimePickerState extends State<_CustomTimePicker> {
 
     final bgCard = esModoOscuro ? Colors.black : Colors.white;
     final borderColor = esModoOscuro
-        ? Colors.white.withOpacity(0.12)
+        ? Colors.white.withValues(alpha: 0.12)
         : Colors.black;
 
     return Container(
@@ -93,7 +112,7 @@ class _CustomTimePickerState extends State<_CustomTimePicker> {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: cs.onSurface.withOpacity(0.4),
+                  color: cs.onSurface.withValues(alpha: 0.4),
                   letterSpacing: 0.5,
                 ),
               ),
@@ -110,7 +129,8 @@ class _CustomTimePickerState extends State<_CustomTimePicker> {
                   style: TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
-                    color: cs.onSurface,
+                    // Rojo cuando la hora es inválida para feedback inmediato
+                    color: _esValida ? cs.onSurface : Colors.redAccent,
                     letterSpacing: 2,
                   ),
                 ),
@@ -120,11 +140,33 @@ class _CustomTimePickerState extends State<_CustomTimePicker> {
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
-                    color: accent,
+                    color: _esValida ? accent : Colors.redAccent,
                   ),
                 ),
               ],
             ),
+          ),
+
+          // ─── Aviso de hora inválida ───────────
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            child: widget.horaMinima != null && !_esValida
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 6, 24, 0),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.access_time, size: 13, color: Colors.redAccent),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            'Elige una hora posterior a la actual',
+                            style: const TextStyle(fontSize: 12, color: Colors.redAccent),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
 
           const SizedBox(height: 16),
@@ -143,9 +185,9 @@ class _CustomTimePickerState extends State<_CustomTimePicker> {
                   child: Container(
                     height: _itemH,
                     decoration: BoxDecoration(
-                      color: accent.withOpacity(0.1),
+                      color: accent.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: accent.withOpacity(0.25)),
+                      border: Border.all(color: accent.withValues(alpha: 0.25)),
                     ),
                   ),
                 ),
@@ -158,7 +200,7 @@ class _CustomTimePickerState extends State<_CustomTimePicker> {
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        color: cs.onSurface.withOpacity(0.4),
+                        color: cs.onSurface.withValues(alpha: 0.4),
                       ),
                     ),
                     Expanded(child: _ruedaMinutos(cs, accent)),
@@ -198,7 +240,7 @@ class _CustomTimePickerState extends State<_CustomTimePicker> {
                   child: OutlinedButton(
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: cs.onSurface.withOpacity(0.6),
+                      foregroundColor: cs.onSurface.withValues(alpha: 0.6),
                       side: BorderSide(color: cs.outlineVariant),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
@@ -210,10 +252,12 @@ class _CustomTimePickerState extends State<_CustomTimePicker> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _confirmar,
+                    // Deshabilitado cuando la hora elegida es anterior a la mínima
+                    onPressed: _esValida ? _confirmar : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
                       foregroundColor: Colors.white,
+                      disabledBackgroundColor: accent.withValues(alpha: 0.3),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -242,7 +286,7 @@ class _CustomTimePickerState extends State<_CustomTimePicker> {
       childDelegate: ListWheelChildBuilderDelegate(
         childCount: 12,
         builder: (_, i) => _itemRueda(
-            '${(i + 1).toString().padLeft(2, '0')}', i + 1 == _hora, cs, accent),
+            (i + 1).toString().padLeft(2, '0'), i + 1 == _hora, cs, accent),
       ),
     );
   }
@@ -270,7 +314,7 @@ class _CustomTimePickerState extends State<_CustomTimePicker> {
         style: TextStyle(
           fontSize: seleccionado ? 26 : 20,
           fontWeight: seleccionado ? FontWeight.bold : FontWeight.normal,
-          color: seleccionado ? accent : cs.onSurface.withOpacity(0.3),
+          color: seleccionado ? accent : cs.onSurface.withValues(alpha: 0.3),
         ),
       ),
     );
@@ -291,7 +335,7 @@ class _CustomTimePickerState extends State<_CustomTimePicker> {
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 14,
-            color: activo ? Colors.white : cs.onSurface.withOpacity(0.4),
+            color: activo ? Colors.white : cs.onSurface.withValues(alpha: 0.4),
           ),
         ),
       ),

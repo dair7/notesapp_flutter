@@ -1,3 +1,4 @@
+// ignore_for_file: constant_identifier_names
 enum Prioridad { ALTA, MEDIA, BAJA }
 
 class Recordatorio {
@@ -20,7 +21,8 @@ class Recordatorio {
   factory Recordatorio.fromJson(Map<String, dynamic> json) {
     return Recordatorio(
       id: json['id'],
-      fecha: DateTime.parse(json['fecha']),
+      // El servidor devuelve LocalDateTime en UTC (sin sufijo Z); se añade para parsear correctamente
+      fecha: DateTime.parse('${json['fecha']}Z').toLocal(),
       completado: json['completado'] ?? false,
       notaId: json['notaId'],
       notaTitulo: json['notaTitulo'],

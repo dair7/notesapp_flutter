@@ -126,7 +126,7 @@ class SettingsScreen extends ConsumerWidget {
                 // ── Versión al fondo ───────────────────
                 Center(
                   child: Text('Notas Pro · v1.0.0',
-                    style: TextStyle(color: cs.onSurface.withOpacity(0.4), fontSize: 12)),
+                    style: TextStyle(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 12)),
                 ),
 
                 const SizedBox(height: 24),
@@ -151,7 +151,7 @@ class SettingsScreen extends ConsumerWidget {
         color: accentColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: accentColor.withOpacity(0.3), blurRadius: 14, offset: const Offset(0, 6)),
+          BoxShadow(color: accentColor.withValues(alpha: 0.3), blurRadius: 14, offset: const Offset(0, 6)),
         ],
       ),
       child: Row(
@@ -161,8 +161,8 @@ class SettingsScreen extends ConsumerWidget {
             width: 52, height: 52,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withOpacity(0.2),
-              border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+              color: Colors.white.withValues(alpha: 0.2),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 2),
             ),
             child: Center(
               child: Text(inicial,
@@ -181,7 +181,7 @@ class SettingsScreen extends ConsumerWidget {
                   maxLines: 1, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 2),
                 Text(usuario?.email ?? '',
-                  style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.75)),
+                  style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.75)),
                   maxLines: 1, overflow: TextOverflow.ellipsis),
               ],
             ),
@@ -192,9 +192,9 @@ class SettingsScreen extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.18),
+              color: Colors.white.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.3)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
             ),
             child: Text(_roleLabel(rol),
               style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
@@ -235,8 +235,10 @@ class SettingsScreen extends ConsumerWidget {
               Text('Tema de la aplicación',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onSurface)),
               const SizedBox(height: 20),
+              // ignore: deprecated_member_use
               ...opciones.entries.map((e) => RadioListTile<ThemeMode>(
                 value: e.key,
+                // ignore: deprecated_member_use
                 groupValue: settings.themeMode,
                 activeColor: const Color(0xFF2A9D8F),
                 title: Row(children: [
@@ -244,6 +246,7 @@ class SettingsScreen extends ConsumerWidget {
                   const SizedBox(width: 12),
                   Text(e.value.$1, style: TextStyle(fontWeight: FontWeight.w500, color: cs.onSurface)),
                 ]),
+                // ignore: deprecated_member_use
                 onChanged: (v) {
                   ref.read(settingsProvider.notifier).setThemeMode(v!);
                   Navigator.pop(sheetCtx);
@@ -285,7 +288,7 @@ class SettingsScreen extends ConsumerWidget {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onSurface)),
               const SizedBox(height: 8),
               Text('Afecta botones, iconos y elementos activos',
-                style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 13)),
+                style: TextStyle(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 13)),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -307,7 +310,7 @@ class SettingsScreen extends ConsumerWidget {
                           ? Border.all(color: color, width: 3)
                           : Border.all(color: Colors.transparent, width: 3),
                         boxShadow: seleccionado
-                          ? [BoxShadow(color: color.withOpacity(0.5), blurRadius: 12, offset: const Offset(0, 4))]
+                          ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 12, offset: const Offset(0, 4))]
                           : [],
                       ),
                       child: seleccionado
@@ -334,14 +337,14 @@ class SettingsScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: cs.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: cs.shadow.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Row(
         children: [
           Container(
             width: 42, height: 42,
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
+              color: Colors.orange.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(Icons.notifications_outlined, color: Colors.orange, size: 20),
@@ -353,13 +356,13 @@ class SettingsScreen extends ConsumerWidget {
               children: [
                 Text('Notificaciones', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: cs.onSurface)),
                 const SizedBox(height: 2),
-                Text('Avisos de recordatorios', style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 12)),
+                Text('Avisos de recordatorios', style: TextStyle(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 12)),
               ],
             ),
           ),
           Switch(
             value: settings.notificacionesEnabled,
-            activeColor: const Color(0xFF2A9D8F),
+            activeThumbColor: const Color(0xFF2A9D8F),
             onChanged: (v) => ref.read(settingsProvider.notifier).setNotificaciones(v),
           ),
         ],
@@ -399,11 +402,14 @@ class SettingsScreen extends ConsumerWidget {
                 Text('Anticipación del aviso',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onSurface)),
                 const SizedBox(height: 20),
+                // ignore: deprecated_member_use
                 ...[15, 30, 60].map((min) => RadioListTile<int>(
                   value: min,
+                  // ignore: deprecated_member_use
                   groupValue: settings.anticipacionMinutos,
                   activeColor: const Color(0xFF2A9D8F),
                   title: Text(etiqueta(min), style: TextStyle(fontWeight: FontWeight.w500, color: cs.onSurface)),
+                  // ignore: deprecated_member_use
                   onChanged: (v) {
                     ref.read(settingsProvider.notifier).setAnticipacion(v!);
                     Navigator.pop(sheetCtx);
@@ -505,7 +511,7 @@ class SettingsScreen extends ConsumerWidget {
                         decoration: BoxDecoration(
                           color: cs.surfaceContainerLowest,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: cs.outlineVariant.withOpacity(0.3)),
+                          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
                         ),
                         child: SingleChildScrollView(
                           controller: scrollController,
@@ -587,7 +593,7 @@ class SettingsScreen extends ConsumerWidget {
       style: TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w700,
-        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
         letterSpacing: 0.8,
       ));
   }
@@ -611,14 +617,14 @@ class SettingsScreen extends ConsumerWidget {
           decoration: BoxDecoration(
             color: cs.surfaceContainerLowest,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: cs.shadow.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+            boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
           ),
           child: Row(
             children: [
               Container(
                 width: 42, height: 42,
                 decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.1),
+                  color: iconColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: iconColor, size: 20),
@@ -630,11 +636,11 @@ class SettingsScreen extends ConsumerWidget {
                   children: [
                     Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: cs.onSurface)),
                     const SizedBox(height: 2),
-                    Text(subtitle, style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 12)),
+                    Text(subtitle, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 12)),
                   ],
                 ),
               ),
-              trailing ?? Icon(Icons.chevron_right, color: cs.onSurface.withOpacity(0.3), size: 20),
+              trailing ?? Icon(Icons.chevron_right, color: cs.onSurface.withValues(alpha: 0.3), size: 20),
             ],
           ),
         ),

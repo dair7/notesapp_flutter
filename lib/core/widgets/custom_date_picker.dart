@@ -15,8 +15,8 @@ Future<DateTime?> mostrarDatePickerPersonalizado({
     context: context,
     barrierDismissible: true,
     barrierLabel: '',
-    barrierColor: Colors.black.withOpacity(0.85),
-    pageBuilder: (_, __, ___) => Center(
+    barrierColor: Colors.black.withValues(alpha: 0.85),
+    pageBuilder: (_, _, _) => Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Material(
@@ -122,7 +122,7 @@ class _CustomDatePickerState extends State<_CustomDatePicker> {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: cs.onSurface.withOpacity(0.4),
+                  color: cs.onSurface.withValues(alpha: 0.4),
                   letterSpacing: 0.5,
                 ),
               ),
@@ -177,7 +177,7 @@ class _CustomDatePickerState extends State<_CustomDatePicker> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: accent.withOpacity(0.1),
+                        color: accent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Row(
@@ -222,7 +222,7 @@ class _CustomDatePickerState extends State<_CustomDatePicker> {
                   child: OutlinedButton(
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: cs.onSurface.withOpacity(0.6),
+                      foregroundColor: cs.onSurface.withValues(alpha: 0.6),
                       side: BorderSide(color: cs.outlineVariant),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -237,7 +237,7 @@ class _CustomDatePickerState extends State<_CustomDatePicker> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: accent.withOpacity(0.3),
+                      disabledBackgroundColor: accent.withValues(alpha: 0.3),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       elevation: 0,
@@ -356,10 +356,10 @@ class _CustomDatePickerState extends State<_CustomDatePicker> {
             children: [
               IconButton(
                 icon: const Icon(Icons.chevron_left),
-                color: _puedeRetroceder ? cs.onSurface.withOpacity(0.6) : cs.onSurface.withOpacity(0.2),
+                color: _puedeRetroceder ? cs.onSurface.withValues(alpha: 0.6) : cs.onSurface.withValues(alpha: 0.2),
                 onPressed: _puedeRetroceder ? () => setState(() {
                   if (_mesSel == 1) { _mesSel = 12; _anioSel--; }
-                  else _mesSel--;
+                  else { _mesSel--; }
                 }) : null,
               ),
               Text(
@@ -368,10 +368,10 @@ class _CustomDatePickerState extends State<_CustomDatePicker> {
               ),
               IconButton(
                 icon: const Icon(Icons.chevron_right),
-                color: cs.onSurface.withOpacity(0.6),
+                color: cs.onSurface.withValues(alpha: 0.6),
                 onPressed: () => setState(() {
                   if (_mesSel == 12) { _mesSel = 1; _anioSel++; }
-                  else _mesSel++;
+                  else { _mesSel++; }
                 }),
               ),
             ],
@@ -387,7 +387,7 @@ class _CustomDatePickerState extends State<_CustomDatePicker> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: cs.onSurface.withOpacity(0.4),
+                      color: cs.onSurface.withValues(alpha: 0.4),
                     ),
                   ),
                 ),
@@ -424,7 +424,7 @@ class _CustomDatePickerState extends State<_CustomDatePicker> {
                     color: seleccionado
                         ? accent
                         : esHoy
-                            ? accent.withOpacity(0.12)
+                            ? accent.withValues(alpha: 0.12)
                             : Colors.transparent,
                     shape: BoxShape.circle,
                   ),
@@ -437,7 +437,7 @@ class _CustomDatePickerState extends State<_CustomDatePicker> {
                         color: seleccionado
                             ? Colors.white
                             : deshabilitado
-                                ? cs.onSurface.withOpacity(0.2)
+                                ? cs.onSurface.withValues(alpha: 0.2)
                                 : esHoy
                                     ? accent
                                     : cs.onSurface,

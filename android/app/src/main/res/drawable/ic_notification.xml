@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Trazo vertical izquierdo de la N -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M10,10 L28,10 L28,90 L10,90 Z" />
+
+    <!-- Trazo diagonal de la N (de arriba-izquierda a abajo-derecha) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M28,10 L46,10 L72,90 L54,90 Z" />
+
+    <!-- Trazo vertical derecho de la N -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M72,10 L90,10 L90,90 L72,90 Z" />
+
+</vector>

@@ -1,7 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:notes_app/core/config/app_config.dart';
+import 'package:notes_app/core/utils/app_snackbar.dart';
+import 'package:notes_app/core/utils/excepciones.dart';
 
 class ApiClient {
 
@@ -15,6 +20,29 @@ class ApiClient {
 
   // Flag para evitar múltiples refreshes simultáneos
   static bool _isRefreshing = false;
+
+  // Evita mostrar múltiples toasts de "sin conexión" en cascada
+  static bool _errorConexionMostrado = false;
+
+  static void _notificarSinConexion() {
+    if (_errorConexionMostrado) return;
+    _errorConexionMostrado = true;
+    AppSnackBar.errorGlobal('Sin conexión a internet');
+    // Permite mostrar el toast de nuevo después de 5 segundos
+    Future.delayed(const Duration(seconds: 5), () => _errorConexionMostrado = false);
+  }
+
+  // Verifica si una excepción es de red (sin internet / timeout)
+  static bool _esErrorDeConexion(dynamic e) {
+    if (e is SocketException || e is TimeoutException) return true;
+    if (e is http.ClientException) return true;
+    final msg = e.toString().toLowerCase();
+    return msg.contains('socketexception') ||
+        msg.contains('clientexception') ||
+        msg.contains('failed host lookup') ||
+        msg.contains('connection refused') ||
+        msg.contains('network is unreachable');
+  }
 
   // ── Token (almacenamiento seguro) ─────────────────
   static Future<void> saveToken(String token) async {
@@ -70,16 +98,16 @@ class ApiClient {
     // Si no es 401/403 o no requiere auth, retornar directamente
     if ((response.statusCode != 401 && response.statusCode != 403) || !auth) return response;
 
-    print('[ApiClient] ⚠️ Recibido 401 — intentando refresh token...');
+    debugPrint('[ApiClient] ⚠️ Recibido 401 — intentando refresh token...');
 
     // Intentar refresh
     final refreshed = await _tryRefreshToken();
     if (!refreshed) {
-      print('[ApiClient] ❌ Refresh falló — retornando 401 original');
+      debugPrint('[ApiClient] ❌ Refresh falló — retornando 401 original');
       return response;
     }
 
-    print('[ApiClient] ✅ Refresh exitoso — reintentando request...');
+    debugPrint('[ApiClient] ✅ Refresh exitoso — reintentando request...');
     // Reintentar el request original con el nuevo token
     return await request();
   }
@@ -87,7 +115,7 @@ class ApiClient {
   /// Intenta renovar el access token usando el refresh token
   static Future<bool> _tryRefreshToken() async {
     if (_isRefreshing) {
-      print('[ApiClient] ⏳ Ya hay un refresh en progreso, esperando...');
+      debugPrint('[ApiClient] ⏳ Ya hay un refresh en progreso, esperando...');
       // Esperar a que termine el refresh en curso
       while (_isRefreshing) {
         await Future.delayed(const Duration(milliseconds: 100));
@@ -101,11 +129,11 @@ class ApiClient {
     try {
       final refreshToken = await getRefreshToken();
       if (refreshToken == null) {
-        print('[ApiClient] ❌ No hay refresh token almacenado');
+        debugPrint('[ApiClient] ❌ No hay refresh token almacenado');
         return false;
       }
 
-      print('[ApiClient] 🔄 Llamando POST /api/auth/refresh-token...');
+      debugPrint('[ApiClient] 🔄 Llamando POST /api/auth/refresh-token...');
       final url = Uri.parse('$baseUrl/api/auth/refresh-token');
       final response = await http.post(
         url,
@@ -113,37 +141,45 @@ class ApiClient {
         body: jsonEncode({'refreshToken': refreshToken}),
       );
 
-      print('[ApiClient] 📩 Respuesta refresh: ${response.statusCode}');
+      debugPrint('[ApiClient] 📩 Respuesta refresh: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         await saveToken(data['token']);
         await saveRefreshToken(data['refreshToken']);
-        print('[ApiClient] ✅ Nuevos tokens guardados');
+        debugPrint('[ApiClient] ✅ Nuevos tokens guardados');
         return true;
       } else {
-        print('[ApiClient] ❌ Refresh falló: ${response.body}');
+        debugPrint('[ApiClient] ❌ Refresh falló: ${response.body}');
         await clearSession();
         return false;
       }
     } catch (e) {
-      print('[ApiClient] ❌ Error en refresh: $e');
+      debugPrint('[ApiClient] ❌ Error en refresh: $e');
       return false;
     } finally {
       _isRefreshing = false;
     }
   }
 
-  // ── HTTP Methods (con auto-refresh) ────────────────
+  // ── HTTP Methods (con auto-refresh y detección de sin conexión) ─
   static Future<http.Response> get(String path, {bool auth = true}) async {
-    return _withAutoRefresh(
-      () async {
-        final url = Uri.parse('$baseUrl$path');
-        final headers = await _headers(auth: auth);
-        return http.get(url, headers: headers);
-      },
-      auth: auth,
-    );
+    try {
+      return await _withAutoRefresh(
+        () async {
+          final url = Uri.parse('$baseUrl$path');
+          final headers = await _headers(auth: auth);
+          return http.get(url, headers: headers).timeout(const Duration(seconds: 15));
+        },
+        auth: auth,
+      );
+    } catch (e) {
+      if (_esErrorDeConexion(e)) {
+        _notificarSinConexion();
+        throw const SinConexionException();
+      }
+      rethrow;
+    }
   }
 
   static Future<http.Response> post(
@@ -151,18 +187,26 @@ class ApiClient {
     Map<String, dynamic>? body,
     bool auth = true,
   }) async {
-    return _withAutoRefresh(
-      () async {
-        final url = Uri.parse('$baseUrl$path');
-        final headers = await _headers(auth: auth);
-        return http.post(
-          url,
-          headers: headers,
-          body: body != null ? jsonEncode(body) : null,
-        );
-      },
-      auth: auth,
-    );
+    try {
+      return await _withAutoRefresh(
+        () async {
+          final url = Uri.parse('$baseUrl$path');
+          final headers = await _headers(auth: auth);
+          return http.post(
+            url,
+            headers: headers,
+            body: body != null ? jsonEncode(body) : null,
+          ).timeout(const Duration(seconds: 15));
+        },
+        auth: auth,
+      );
+    } catch (e) {
+      if (_esErrorDeConexion(e)) {
+        _notificarSinConexion();
+        throw const SinConexionException();
+      }
+      rethrow;
+    }
   }
 
   static Future<http.Response> put(
@@ -170,28 +214,44 @@ class ApiClient {
     Object? body,
     bool auth = true,
   }) async {
-    return _withAutoRefresh(
-      () async {
-        final url = Uri.parse('$baseUrl$path');
-        final headers = await _headers(auth: auth);
-        return http.put(
-          url,
-          headers: headers,
-          body: body != null ? jsonEncode(body) : null,
-        );
-      },
-      auth: auth,
-    );
+    try {
+      return await _withAutoRefresh(
+        () async {
+          final url = Uri.parse('$baseUrl$path');
+          final headers = await _headers(auth: auth);
+          return http.put(
+            url,
+            headers: headers,
+            body: body != null ? jsonEncode(body) : null,
+          ).timeout(const Duration(seconds: 15));
+        },
+        auth: auth,
+      );
+    } catch (e) {
+      if (_esErrorDeConexion(e)) {
+        _notificarSinConexion();
+        throw const SinConexionException();
+      }
+      rethrow;
+    }
   }
 
   static Future<http.Response> delete(String path, {bool auth = true}) async {
-    return _withAutoRefresh(
-      () async {
-        final url = Uri.parse('$baseUrl$path');
-        final headers = await _headers(auth: auth);
-        return http.delete(url, headers: headers);
-      },
-      auth: auth,
-    );
+    try {
+      return await _withAutoRefresh(
+        () async {
+          final url = Uri.parse('$baseUrl$path');
+          final headers = await _headers(auth: auth);
+          return http.delete(url, headers: headers).timeout(const Duration(seconds: 15));
+        },
+        auth: auth,
+      );
+    } catch (e) {
+      if (_esErrorDeConexion(e)) {
+        _notificarSinConexion();
+        throw const SinConexionException();
+      }
+      rethrow;
+    }
   }
 }

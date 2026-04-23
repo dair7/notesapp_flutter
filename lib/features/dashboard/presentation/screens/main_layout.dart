@@ -3,7 +3,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notes_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:notes_app/features/dashboard/presentation/screens/dashboard_screen.dart';
-import 'package:notes_app/features/notes/presentation/screens/add_edit_note_screen.dart';
+import 'package:notes_app/features/notes/presentation/screens/add_edit_note_screen_v2.dart';
 import 'package:notes_app/features/notes/presentation/screens/notes_list_screen.dart';
 import 'package:notes_app/features/reminders/presentation/screens/reminders_list_screen.dart';
 import 'package:notes_app/features/reminders/presentation/screens/add_reminder_screen.dart';
@@ -13,6 +13,22 @@ import 'package:notes_app/features/admin/presentation/screens/users_list_screen.
 import 'package:notes_app/core/enums/role_type.dart';
 import 'package:notes_app/features/notes/presentation/providers/notes_provider.dart';
 import 'package:notes_app/features/settings/presentation/providers/settings_provider.dart';
+import 'package:notes_app/core/services/notification_service.dart';
+
+// Tab actualmente seleccionado en el bottom nav del [MainLayout].
+// Se expone como provider para que pantallas internas (p.ej. Dashboard
+// con sus botones "Ver todas") puedan cambiar de sección sin depender
+// de InheritedWidget ni callbacks.
+class SelectedTabNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void set(int index) => state = index;
+}
+
+final selectedTabProvider = NotifierProvider<SelectedTabNotifier, int>(() {
+  return SelectedTabNotifier();
+});
 
 class MainLayout extends ConsumerStatefulWidget {
   const MainLayout({super.key});
@@ -22,16 +38,34 @@ class MainLayout extends ConsumerStatefulWidget {
 }
 
 class _MainLayoutState extends ConsumerState<MainLayout> {
-  int  _selectedIndex = 0;
-  bool _navVisible    = true;
+  bool _navVisible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Caso cold start: la app fue abierta al tocar una notificación
+    // El navigator no estaba listo en ese momento, se guardó el tab aquí
+    final tabPendiente = NotificationService.consumirTabPendiente();
+    if (tabPendiente != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(selectedTabProvider.notifier).set(tabPendiente);
+      });
+    }
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Abre el tab indicado al navegar desde una notificación
+    // Caso background: la app estaba en segundo plano y se tocó la notificación
+    // pushNamedAndRemoveUntil pasa los argumentos en la ruta
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Map && args['tab'] is int) {
-      _selectedIndex = args['tab'] as int;
+      final tab = args['tab'] as int;
+      if (tab != ref.read(selectedTabProvider)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(selectedTabProvider.notifier).set(tab);
+        });
+      }
     }
   }
 
@@ -126,7 +160,9 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     final inSelection  = ref.watch(selectionModeProvider);
     final accentColor  = ref.watch(settingsProvider).accentColor;
 
-    if (_selectedIndex >= screens.length) _selectedIndex = 0;
+    // Index del tab actual leído desde el provider global
+    int selectedIndex = ref.watch(selectedTabProvider);
+    if (selectedIndex >= screens.length) selectedIndex = 0;
 
     // En modo selección siempre mostramos la barra de selección (la nav desaparece)
     final showNav = !inSelection;
@@ -138,25 +174,34 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
 
       body: NotificationListener<ScrollNotification>(
         onNotification: _handleScroll,
-        child: screens[_selectedIndex],
+        child: screens[selectedIndex],
       ),
 
-      // FAB
-      floatingActionButton: (isAdmin || _selectedIndex == screens.length - 1 || inSelection)
+      // FAB — solo en Notas (tab 1) y Tareas (tab 2), se oculta al hacer scroll
+      floatingActionButton: (isAdmin || selectedIndex == 0 || selectedIndex == screens.length - 1 || inSelection)
           ? null
-          : FloatingActionButton.extended(
-              onPressed: () {
-                if (_selectedIndex == 2) {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AddReminderScreen()));
-                } else {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AddEditNoteScreen()));
-                }
-              },
-              backgroundColor: accentColor,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add),
-              label: Text(_selectedIndex == 2 ? 'Recordatorio' : 'Nota'),
-              elevation: 4,
+          : AnimatedSlide(
+              offset: _navVisible ? Offset.zero : const Offset(0, 2.5),
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeInOut,
+              child: AnimatedOpacity(
+                opacity: _navVisible ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 200),
+                child: FloatingActionButton.extended(
+                  onPressed: () {
+                    if (selectedIndex == 2) {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const AddReminderScreen()));
+                    } else {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const AddEditNoteScreenV2()));
+                    }
+                  },
+                  backgroundColor: accentColor,
+                  foregroundColor: Colors.white,
+                  icon: const Icon(Icons.add),
+                  label: Text(selectedIndex == 2 ? 'Tarea' : 'Nota'),
+                  elevation: 4,
+                ),
+              ),
             ),
 
       bottomNavigationBar: showNav
@@ -172,7 +217,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(36),
                     border: Border.all(
-                      color: accentColor.withOpacity(0.80),
+                      color: accentColor.withValues(alpha: 0.80),
                       width: 1.7,
                     ),
                   ),
@@ -191,17 +236,15 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                       }),
                     ),
                     child: NavigationBar(
-                      selectedIndex: _selectedIndex,
+                      selectedIndex: selectedIndex,
                       onDestinationSelected: (index) {
-                        setState(() {
-                          _selectedIndex = index;
-                          _navVisible    = true;
-                        });
+                        ref.read(selectedTabProvider.notifier).set(index);
+                        setState(() => _navVisible = true);
                       },
                       backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
                       elevation: 0,
                       shadowColor: Colors.transparent,
-                      indicatorColor: accentColor.withOpacity(0.12),
+                      indicatorColor: accentColor.withValues(alpha: 0.12),
                       surfaceTintColor: Colors.transparent,
                       destinations: destinations,
                     ),

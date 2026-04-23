@@ -8,7 +8,7 @@ class RecordatoriosService {
     final response = await ApiClient.post(
       '/api/recordatorios/$notaId',
       body: {
-        'fecha': fecha.toIso8601String(),
+        'fecha': fecha.toUtc().toIso8601String(), // UTC para que el servidor almacene y compare correctamente
         'prioridad': prioridad.name,
       },
     );
@@ -50,7 +50,7 @@ class RecordatoriosService {
   static Future<Recordatorio> actualizarFecha(int recordatorioId, DateTime nuevaFecha) async {
     final response = await ApiClient.put(
       '/api/recordatorios/$recordatorioId',
-      body: {'fecha': nuevaFecha.toIso8601String()},
+      body: {'fecha': nuevaFecha.toUtc().toIso8601String()}, // UTC para consistencia con el servidor
     );
 
     if (response.statusCode == 200) {

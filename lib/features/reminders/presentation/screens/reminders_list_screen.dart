@@ -6,6 +6,7 @@ import 'package:notes_app/core/widgets/custom_date_picker.dart';
 import 'package:notes_app/core/widgets/custom_time_picker.dart';
 import 'package:notes_app/features/settings/presentation/providers/settings_provider.dart';
 import 'package:notes_app/core/utils/app_snackbar.dart';
+import 'package:notes_app/core/utils/excepciones.dart';
 
 // Filtros disponibles para la lista
 enum _FiltroRecordatorio { todos, pendientes, completados }
@@ -120,9 +121,29 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
     );
     if (fecha == null || !mounted) return;
 
+    // Si el usuario eligió hoy, el time picker restringe horas pasadas
+    final esHoy = fecha.year == ahora.year &&
+        fecha.month == ahora.month &&
+        fecha.day == ahora.day;
+
+    final horaMinima = esHoy ? TimeOfDay.fromDateTime(ahora) : null;
+
+    // Si la hora original ya venció y el día es hoy, arrancar 5 min adelante
+    // para que el picker no abra con una selección ya inválida
+    TimeOfDay horaInicial = TimeOfDay.fromDateTime(recordatorio.fecha);
+    if (esHoy && horaMinima != null) {
+      final h24Original = horaInicial.hour;
+      final pasada = h24Original < horaMinima.hour ||
+          (h24Original == horaMinima.hour && horaInicial.minute <= horaMinima.minute);
+      if (pasada) {
+        horaInicial = TimeOfDay.fromDateTime(ahora.add(const Duration(minutes: 5)));
+      }
+    }
+
     final hora = await mostrarTimePickerPersonalizado(
       context: context,
-      horaInicial: TimeOfDay.fromDateTime(recordatorio.fecha),
+      horaInicial: horaInicial,
+      horaMinima: horaMinima,
     );
     if (hora == null || !mounted) return;
 
@@ -134,9 +155,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
         AppSnackBar.exito(context, 'Tarea actualizada');
       }
     } catch (e) {
-      if (mounted) {
-        AppSnackBar.error(context, e.toString().replaceAll('Exception: ', ''));
-      }
+      if (mounted) AppSnackBar.errorDesdeExcepcion(context, e);
     }
   }
 
@@ -146,8 +165,8 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
       context: context,
       barrierDismissible: true,
       barrierLabel: '',
-      barrierColor: Colors.black.withOpacity(0.85),
-      pageBuilder: (ctx, _, __) {
+      barrierColor: Colors.black.withValues(alpha: 0.85),
+      pageBuilder: (ctx, _, _) {
         final cs = Theme.of(ctx).colorScheme;
         return Center(
           child: Padding(
@@ -166,7 +185,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.redAccent.withOpacity(0.1),
+                        color: Colors.redAccent.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 28),
@@ -182,7 +201,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                     const SizedBox(height: 4),
                     Text(
                       '¿Eliminar esta tarea? No se puede deshacer.',
-                      style: TextStyle(fontSize: 13, color: cs.onSurface.withOpacity(0.45)),
+                      style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.45)),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
@@ -210,7 +229,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                       child: OutlinedButton(
                         onPressed: () => Navigator.pop(ctx),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: cs.onSurface.withOpacity(0.6),
+                          foregroundColor: cs.onSurface.withValues(alpha: 0.6),
                           side: BorderSide(color: cs.outlineVariant),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -266,8 +285,8 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
       context: context,
       barrierDismissible: true,
       barrierLabel: '',
-      barrierColor: Colors.black.withOpacity(0.85),
-      pageBuilder: (ctx, _, __) {
+      barrierColor: Colors.black.withValues(alpha: 0.85),
+      pageBuilder: (ctx, _, _) {
         final cs = Theme.of(ctx).colorScheme;
         return Center(
           child: Padding(
@@ -286,7 +305,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.redAccent.withOpacity(0.1),
+                        color: Colors.redAccent.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent, size: 28),
@@ -300,7 +319,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                     const SizedBox(height: 4),
                     Text(
                       'Esta acción no se puede deshacer.',
-                      style: TextStyle(fontSize: 13, color: cs.onSurface.withOpacity(0.45)),
+                      style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.45)),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
@@ -335,7 +354,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                       child: OutlinedButton(
                         onPressed: () => Navigator.pop(ctx),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: cs.onSurface.withOpacity(0.6),
+                          foregroundColor: cs.onSurface.withValues(alpha: 0.6),
                           side: BorderSide(color: cs.outlineVariant),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -353,14 +372,15 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
     );
   }
 
-  void _mostrarOpcionesCompletado(Recordatorio recordatorio) {
+  /// Diálogo de confirmación al tocar una tarea pendiente
+  void _mostrarOpcionesPendiente(Recordatorio recordatorio) {
     final nombreNota = recordatorio.notaTitulo ?? 'Sin nota';
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
       barrierLabel: '',
-      barrierColor: Colors.black.withOpacity(0.85),
-      pageBuilder: (ctx, _, __) {
+      barrierColor: Colors.black.withValues(alpha: 0.85),
+      pageBuilder: (ctx, _, _) {
         final cs = Theme.of(ctx).colorScheme;
         return Center(
           child: Padding(
@@ -379,10 +399,10 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: _accentColor.withOpacity(0.1),
+                        color: _accentColor.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.task_alt_rounded, color: _accentColor, size: 28),
+                      child: Icon(Icons.notifications_outlined, color: _accentColor, size: 28),
                     ),
                     const SizedBox(height: 14),
                     Text(
@@ -394,8 +414,8 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Tarea completada',
-                      style: TextStyle(fontSize: 13, color: cs.onSurface.withOpacity(0.45)),
+                      'Tarea pendiente',
+                      style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.45)),
                     ),
                     const SizedBox(height: 24),
                     SizedBox(
@@ -405,8 +425,8 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                           Navigator.pop(ctx);
                           ref.read(remindersProvider.notifier).toggleCompletado(recordatorio.id);
                         },
-                        icon: const Icon(Icons.replay_rounded, size: 20),
-                        label: const Text('Reactivar tarea',
+                        icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
+                        label: const Text('Marcar como completada',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _accentColor,
@@ -423,17 +443,31 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                       child: OutlinedButton.icon(
                         onPressed: () {
                           Navigator.pop(ctx);
-                          _confirmarEliminar(recordatorio);
+                          _editarRecordatorio(recordatorio);
                         },
-                        icon: const Icon(Icons.delete_outline, size: 20),
-                        label: const Text('Eliminar',
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                        icon: Icon(Icons.edit_outlined, size: 20, color: _accentColor),
+                        label: Text('Editar fecha / hora',
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: _accentColor)),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.redAccent,
-                          side: BorderSide(color: Colors.redAccent.withOpacity(0.4)),
+                          foregroundColor: _accentColor,
+                          side: BorderSide(color: _accentColor.withValues(alpha: 0.4)),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: cs.onSurface.withValues(alpha: 0.6),
+                          side: BorderSide(color: cs.outlineVariant),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: const Text('Cancelar', style: TextStyle(fontSize: 15)),
                       ),
                     ),
                   ],
@@ -488,7 +522,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                           const SizedBox(height: 5),
                           remindersAsync.when(
                             loading: () => const Text('Cargando...', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                            error: (_, __) => const Text('Error al cargar', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                            error: (_, _) => const Text('Error al cargar', style: TextStyle(color: Colors.white70, fontSize: 14)),
                             data: (recordatorios) {
                               final pendientes = recordatorios.where((r) => !r.completado).length;
                               final completados = recordatorios.where((r) => r.completado).length;
@@ -503,7 +537,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                           Container(
                             height: 42,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
+                              color: Colors.white.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: TextField(
@@ -513,7 +547,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                               onChanged: (v) => setState(() => _searchQuery = v),
                               decoration: InputDecoration(
                                 hintText: 'Buscar por título de nota...',
-                                hintStyle: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
+                                hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14),
                                 prefixIcon: const Icon(Icons.search, color: Colors.white70, size: 20),
                                 border: InputBorder.none,
                                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -552,7 +586,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
               right: 24,
               child: remindersAsync.when(
                 loading: () => const SizedBox.shrink(),
-                error: (_, __) => const SizedBox.shrink(),
+                error: (_, _) => const SizedBox.shrink(),
                 data: (recordatorios) {
                   final pendientes = recordatorios.where((r) => !r.completado).length;
                   final completados = recordatorios.where((r) => r.completado).length;
@@ -578,7 +612,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                               CircularProgressIndicator(
                                 value: progreso,
                                 strokeWidth: 4,
-                                backgroundColor: cs.onSurface.withOpacity(0.1),
+                                backgroundColor: cs.onSurface.withValues(alpha: 0.1),
                                 valueColor: AlwaysStoppedAnimation<Color>(accentColor),
                               ),
                               Text(
@@ -600,7 +634,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 '$completados de $total completados',
-                                style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 12),
+                                style: TextStyle(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 12),
                               ),
                             ],
                           ),
@@ -625,7 +659,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
         // ─── BANNER DE VENCIDOS ───────────────────────
         remindersAsync.when(
           loading: () => const SizedBox.shrink(),
-          error: (_, __) => const SizedBox.shrink(),
+          error: (_, _) => const SizedBox.shrink(),
           data: (recordatorios) {
             final vencidos = recordatorios.where((r) =>
               !r.completado && r.fecha.isBefore(DateTime.now())
@@ -638,9 +672,9 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: Colors.redAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                  border: Border.all(color: Colors.redAccent.withValues(alpha: 0.4)),
                 ),
                 child: Row(
                   children: [
@@ -713,7 +747,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.notifications_off_outlined, size: 64, color: Colors.grey.withOpacity(0.4)),
+                        Icon(Icons.notifications_off_outlined, size: 64, color: Colors.grey.withValues(alpha: 0.4)),
                         const SizedBox(height: 16),
                         const Text(
                           'No tienes tareas',
@@ -741,7 +775,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.search_off, size: 56, color: Colors.grey.withOpacity(0.4)),
+                        Icon(Icons.search_off, size: 56, color: Colors.grey.withValues(alpha: 0.4)),
                         const SizedBox(height: 16),
                         const Text(
                           'Sin resultados',
@@ -764,19 +798,19 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
               }
 
               // Separar pendientes primero ordenados por prioridad luego fecha, completados abajo
-              int _pesoprioridad(Prioridad p) =>
+              int pesoprioridad(Prioridad p) =>
                   p == Prioridad.ALTA ? 0 : p == Prioridad.MEDIA ? 1 : 2;
 
               final pendientes = filtrados.where((r) => !r.completado).toList()
                 ..sort((a, b) {
-                  final cmp = _pesoprioridad(a.prioridad).compareTo(_pesoprioridad(b.prioridad));
+                  final cmp = pesoprioridad(a.prioridad).compareTo(pesoprioridad(b.prioridad));
                   return cmp != 0 ? cmp : a.fecha.compareTo(b.fecha);
                 });
               final completados = filtrados.where((r) => r.completado).toList();
               final ordenados = [...pendientes, ...completados];
 
               return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                padding: const EdgeInsets.fromLTRB(24, 4, 24, 120),
                 itemCount: ordenados.length,
                 itemBuilder: (context, index) {
                   final recordatorio = ordenados[index];
@@ -795,7 +829,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                               const SizedBox(width: 8),
                               const Text('Completados', style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w600)),
                               const SizedBox(width: 8),
-                              Expanded(child: Divider(color: Colors.grey.withOpacity(0.3))),
+                              Expanded(child: Divider(color: Colors.grey.withValues(alpha: 0.3))),
                             ],
                           ),
                         ),
@@ -809,24 +843,25 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                               : DismissDirection.endToStart,
                           confirmDismiss: (_) async {
                             if (recordatorio.completado) {
-                              _mostrarOpcionesCompletado(recordatorio);
-                            } else {
-                              _confirmarEliminar(recordatorio);
+                              // true → animación de swipe completa sin rebote
+                              return true;
                             }
+                            _confirmarEliminar(recordatorio);
                             return false;
+                          },
+                          onDismissed: (_) {
+                            // Solo llega aquí cuando completado=true (las pendientes retornan false)
+                            ref.read(remindersProvider.notifier).deleteRecordatorio(recordatorio.id);
+                            AppSnackBar.exito(context, 'Tarea eliminada');
                           },
                           background: Container(
                             alignment: Alignment.centerRight,
                             padding: const EdgeInsets.only(right: 20),
                             decoration: BoxDecoration(
-                              color: recordatorio.completado
-                                  ? _accentColor.withOpacity(0.15)
-                                  : Colors.redAccent.withOpacity(0.15),
+                              color: Colors.redAccent.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(20),
                             ),
-                            child: recordatorio.completado
-                                ? Icon(Icons.replay_rounded, color: _accentColor, size: 28)
-                                : const Icon(Icons.delete_outline, color: Colors.redAccent, size: 28),
+                            child: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 28),
                           ),
                           child: _buildReminderCard(recordatorio),
                         ),
@@ -859,7 +894,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
           children: [
             GestureDetector(
               onTap: _salirModoSeleccion,
-              child: Icon(Icons.close_rounded, color: cs.onSurface.withOpacity(0.5), size: 22),
+              child: Icon(Icons.close_rounded, color: cs.onSurface.withValues(alpha: 0.5), size: 22),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -898,10 +933,10 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
           color: activo ? _accentColor : cs.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: activo ? _accentColor : cs.outlineVariant.withOpacity(0.4),
+            color: activo ? _accentColor : cs.outlineVariant.withValues(alpha: 0.4),
           ),
           boxShadow: activo
-              ? [BoxShadow(color: _accentColor.withOpacity(0.25), blurRadius: 8, offset: const Offset(0, 3))]
+              ? [BoxShadow(color: _accentColor.withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 3))]
               : [],
         ),
         child: Text(
@@ -909,7 +944,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: activo ? Colors.white : cs.onSurface.withOpacity(0.6),
+            color: activo ? Colors.white : cs.onSurface.withValues(alpha: 0.6),
           ),
         ),
       ),
@@ -927,9 +962,9 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -958,8 +993,9 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
         if (_modoSeleccion) {
           _toggleSeleccion(id, esCompletado);
         } else if (!esCompletado) {
-          ref.read(remindersProvider.notifier).toggleCompletado(recordatorio.id);
+          _mostrarOpcionesPendiente(recordatorio);
         }
+        // Completadas: tap no hace nada, solo se eliminan con swipe
       },
       onLongPress: () {
         if (!_modoSeleccion) {
@@ -975,33 +1011,33 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: estaSeleccionado
-              ? Colors.redAccent.withOpacity(0.07)
+              ? Colors.redAccent.withValues(alpha: 0.07)
               : esBloqueado
-                  ? cs.surfaceContainerLowest.withOpacity(0.35)
+                  ? cs.surfaceContainerLowest.withValues(alpha: 0.35)
                   : esCompletado
-                      ? cs.surfaceContainerLowest.withOpacity(0.7)
+                      ? cs.surfaceContainerLowest.withValues(alpha: 0.7)
                       : cs.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: estaSeleccionado
-                ? Colors.redAccent.withOpacity(0.4)
+                ? Colors.redAccent.withValues(alpha: 0.4)
                 : esCompletado
-                    ? cs.outlineVariant.withOpacity(0.2)
-                    : color.withOpacity(0.2),
+                    ? cs.outlineVariant.withValues(alpha: 0.2)
+                    : color.withValues(alpha: 0.2),
           ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // ─── Icono / Checkbox ──────────────────
+            // ─── Icono de estado ──────────────────
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 44,
               height: 44,
               decoration: BoxDecoration(
                 color: estaSeleccionado
-                    ? Colors.redAccent.withOpacity(0.15)
-                    : color.withOpacity(0.12),
+                    ? Colors.redAccent.withValues(alpha: 0.15)
+                    : color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(14),
                 border: estaSeleccionado
                     ? Border.all(color: Colors.redAccent, width: 2)
@@ -1020,7 +1056,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Título + botón editar
+                  // Título
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -1030,20 +1066,13 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
-                            color: esCompletado ? cs.onSurface.withOpacity(0.38) : cs.onSurface,
+                            color: esCompletado ? cs.onSurface.withValues(alpha: 0.38) : cs.onSurface,
                             decoration: esCompletado ? TextDecoration.lineThrough : null,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (!esCompletado) ...[
-                        const SizedBox(width: 12),
-                        GestureDetector(
-                          onTap: () => _editarRecordatorio(recordatorio),
-                          child: Icon(Icons.edit_outlined, size: 20, color: cs.onSurface.withOpacity(0.75)),
-                        ),
-                      ],
                     ],
                   ),
                   const SizedBox(height: 5),
@@ -1051,12 +1080,12 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                   // Fecha + badges (solo pendientes)
                   Row(
                     children: [
-                      Icon(Icons.access_time, size: 12, color: cs.onSurface.withOpacity(0.35)),
+                      Icon(Icons.access_time, size: 12, color: cs.onSurface.withValues(alpha: 0.35)),
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
                           _formatFechaCompleta(recordatorio.fecha),
-                          style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 11),
+                          style: TextStyle(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 11),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -1067,7 +1096,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: color.withOpacity(0.12),
+                            color: color.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -1088,7 +1117,7 @@ class _RemindersListScreenState extends ConsumerState<RemindersListScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
+                  color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(

@@ -12,6 +12,9 @@ class NotificationService {
   // Clave global de navegación para abrir la app al tocar la notificación
   static GlobalKey<NavigatorState>? navigatorKey;
 
+  // Tab pendiente cuando el navigator aún no está listo (cold start)
+  static int? _tabPendiente;
+
   // Offsets para evitar colisión de IDs entre tipos de notificación
   static const int _offsetAnticipada = 1000000;
   static const int _offsetVencida    = 2000000;
@@ -35,6 +38,12 @@ class NotificationService {
       onDidReceiveNotificationResponse: _alTocarNotificacion,
     );
 
+    // Detectar si la app fue abierta desde una notificación (cold start / app terminada)
+    final detalles = await _plugin.getNotificationAppLaunchDetails();
+    if (detalles?.didNotificationLaunchApp == true) {
+      _tabPendiente = 2; // Ir a la pantalla de Tareas al iniciar
+    }
+
     // Solicitar permiso en Android 13+
     await _plugin
         .resolvePlatformSpecificImplementation<
@@ -47,16 +56,34 @@ class NotificationService {
             AndroidFlutterLocalNotificationsPlugin>()
         ?.requestExactAlarmsPermission();
 
+    // Cancelar notificaciones antiguas para que se reprogramen con el ícono nuevo
+    await _plugin.cancelAll();
+
     _inicializado = true;
   }
 
-  /// Al tocar la notificación navega a la pantalla de recordatorios
+  /// Al tocar la notificación navega a la pantalla de recordatorios.
+  /// Si el navigator no está listo (cold start), guarda el tab para que
+  /// MainLayout lo consuma después del splash.
   static void _alTocarNotificacion(NotificationResponse response) {
-    navigatorKey?.currentState?.pushNamedAndRemoveUntil(
-      '/dashboard',
-      (route) => false,
-      arguments: {'tab': 2}, // tab 2 = Recordatorios
-    );
+    if (navigatorKey?.currentState != null) {
+      navigatorKey!.currentState!.pushNamedAndRemoveUntil(
+        '/dashboard',
+        (route) => false,
+        arguments: {'tab': 2}, // tab 2 = Recordatorios
+      );
+    } else {
+      // Navigator todavía no está listo — se aplica en MainLayout tras el splash
+      _tabPendiente = 2;
+    }
+  }
+
+  /// Devuelve el tab pendiente de una notificación y lo limpia.
+  /// MainLayout debe llamar esto en initState para el caso cold start.
+  static int? consumirTabPendiente() {
+    final tab = _tabPendiente;
+    _tabPendiente = null;
+    return tab;
   }
 
   /// Programa dos notificaciones: una hora antes y en el momento exacto
@@ -118,7 +145,7 @@ class NotificationService {
           channelDescription: 'Notificaciones de recordatorios de notas',
           importance: Importance.high,
           priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
+          icon: 'ic_notification',
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,

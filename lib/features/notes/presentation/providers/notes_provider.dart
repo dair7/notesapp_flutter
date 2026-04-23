@@ -13,10 +13,10 @@ class NotesNotifier extends AsyncNotifier<List<Nota>> {
     return await NotasService.obtenerNotas(userId);
   }
 
-  // Crear nota en el backend
-  Future<void> addNota(Nota nuevaNota) async {
+  // Crear nota en el backend — retorna la nota creada con su id asignado
+  Future<Nota> addNota(Nota nuevaNota) async {
     final userId = await ApiClient.getUserId();
-    if (userId == null) return;
+    if (userId == null) throw Exception('Usuario no autenticado');
 
     final notaCreada = await NotasService.crearNota(
       userId,
@@ -28,6 +28,7 @@ class NotesNotifier extends AsyncNotifier<List<Nota>> {
 
     final notasActuales = state.value ?? [];
     state = AsyncData([notaCreada, ...notasActuales]);
+    return notaCreada;
   }
 
   // Actualizar nota en el backend

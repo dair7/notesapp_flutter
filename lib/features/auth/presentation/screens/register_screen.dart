@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:notes_app/core/utils/app_snackbar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notes_app/features/auth/presentation/providers/auth_provider.dart';
-import 'package:notes_app/features/dashboard/presentation/screens/main_layout.dart';
-
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
 

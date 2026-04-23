@@ -62,7 +62,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 }
               } catch (e) {
                 if (mounted) {
-                  AppSnackBar.error(context, e.toString().replaceAll('Exception: ', ''));
+                  AppSnackBar.errorDesdeExcepcion(context, e);
                 }
               }
             },
@@ -93,7 +93,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                 }
               } catch (e) {
                 if (mounted) {
-                  AppSnackBar.error(context, e.toString().replaceAll('Exception: ', ''));
+                  AppSnackBar.errorDesdeExcepcion(context, e);
                 }
               }
             },
@@ -136,7 +136,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                       onTap: _mostrarCrearAdmin,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -152,7 +152,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               const SizedBox(height: 5),
               adminsAsync.when(
                 loading: () => const Text('Cargando...', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                error: (_, __) => const Text('Error al cargar', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                error: (_, _) => const Text('Error al cargar', style: TextStyle(color: Colors.white70, fontSize: 14)),
                 data: (admins) => Text(
                   '${admins.length} administrador${admins.length == 1 ? '' : 'es'}',
                   style: const TextStyle(color: Colors.white70, fontSize: 14),
@@ -206,13 +206,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))],
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
                         ),
                         child: Row(
                           children: [
                             Container(
                               width: 44, height: 44,
-                              decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(14)),
+                              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
                               child: Center(
                                 child: Text(admin.nombre.substring(0, 1).toUpperCase(), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
                               ),
@@ -230,13 +230,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
                               child: Text(admin.role.name, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
                             ),
                             if (isSuperAdmin && admin.role != RoleType.SUPER_ADMIN) ...[
                               const SizedBox(width: 4),
                               IconButton(
-                                icon: Icon(Icons.delete_outline, color: Colors.redAccent.withOpacity(0.6), size: 20),
+                                icon: Icon(Icons.delete_outline, color: Colors.redAccent.withValues(alpha: 0.6), size: 20),
                                 onPressed: () => _confirmarEliminar(admin),
                               ),
                             ],
