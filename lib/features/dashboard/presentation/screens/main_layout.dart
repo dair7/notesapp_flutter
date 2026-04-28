@@ -8,9 +8,6 @@ import 'package:notes_app/features/notes/presentation/screens/notes_list_screen.
 import 'package:notes_app/features/reminders/presentation/screens/reminders_list_screen.dart';
 import 'package:notes_app/features/reminders/presentation/screens/add_reminder_screen.dart';
 import 'package:notes_app/features/settings/presentation/screens/settings_screen.dart';
-import 'package:notes_app/features/admin/presentation/screens/admin_screen.dart';
-import 'package:notes_app/features/admin/presentation/screens/users_list_screen.dart';
-import 'package:notes_app/core/enums/role_type.dart';
 import 'package:notes_app/features/notes/presentation/providers/notes_provider.dart';
 import 'package:notes_app/features/settings/presentation/providers/settings_provider.dart';
 import 'package:notes_app/core/services/notification_service.dart';
@@ -69,49 +66,14 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     }
   }
 
-  bool _isAdmin(RoleType? role) =>
-      role == RoleType.ADMIN || role == RoleType.SUPER_ADMIN;
-
-  // ─── Pantallas para ADMIN ─────────────────────
-  final List<Widget> _adminScreens = [
-    const DashboardScreen(),
-    const UsersListScreen(),
-    const AdminScreen(),
-    const SettingsScreen(),
-  ];
-
-  final List<NavigationDestination> _adminDestinations = const [
-    NavigationDestination(
-      icon:         Icon(Icons.grid_view_outlined),
-      selectedIcon: Icon(Icons.grid_view_rounded),
-      label: 'Dashboard',
-    ),
-    NavigationDestination(
-      icon:         Icon(Icons.group_outlined),
-      selectedIcon: Icon(Icons.group_rounded),
-      label: 'Usuarios',
-    ),
-    NavigationDestination(
-      icon:         Icon(Icons.shield_outlined),
-      selectedIcon: Icon(Icons.shield_rounded),
-      label: 'Admins',
-    ),
-    NavigationDestination(
-      icon:         Icon(Icons.tune_outlined),
-      selectedIcon: Icon(Icons.tune_rounded),
-      label: 'Ajustes',
-    ),
-  ];
-
-  // ─── Pantallas para USUARIO normal ────────────
-  final List<Widget> _userScreens = [
+  final List<Widget> _screens = [
     const DashboardScreen(),
     const NotesListScreen(),
     const RemindersListScreen(),
     const SettingsScreen(),
   ];
 
-  final List<NavigationDestination> _userDestinations = const [
+  final List<NavigationDestination> _destinations = const [
     NavigationDestination(
       icon:         Icon(Icons.grid_view_outlined),
       selectedIcon: Icon(Icons.grid_view_rounded),
@@ -153,16 +115,12 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
 
   @override
   Widget build(BuildContext context) {
-    final authState    = ref.watch(authProvider);
-    final isAdmin      = _isAdmin(authState.usuario?.role);
-    final screens      = isAdmin ? _adminScreens    : _userScreens;
-    final destinations = isAdmin ? _adminDestinations : _userDestinations;
     final inSelection  = ref.watch(selectionModeProvider);
     final accentColor  = ref.watch(settingsProvider).accentColor;
 
     // Index del tab actual leído desde el provider global
     int selectedIndex = ref.watch(selectedTabProvider);
-    if (selectedIndex >= screens.length) selectedIndex = 0;
+    if (selectedIndex >= _screens.length) selectedIndex = 0;
 
     // En modo selección siempre mostramos la barra de selección (la nav desaparece)
     final showNav = !inSelection;
@@ -174,11 +132,11 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
 
       body: NotificationListener<ScrollNotification>(
         onNotification: _handleScroll,
-        child: screens[selectedIndex],
+        child: _screens[selectedIndex],
       ),
 
       // FAB — solo en Notas (tab 1) y Tareas (tab 2), se oculta al hacer scroll
-      floatingActionButton: (isAdmin || selectedIndex == 0 || selectedIndex == screens.length - 1 || inSelection)
+      floatingActionButton: (selectedIndex == 0 || selectedIndex == _screens.length - 1 || inSelection)
           ? null
           : AnimatedSlide(
               offset: _navVisible ? Offset.zero : const Offset(0, 2.5),
@@ -246,7 +204,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                       shadowColor: Colors.transparent,
                       indicatorColor: accentColor.withValues(alpha: 0.12),
                       surfaceTintColor: Colors.transparent,
-                      destinations: destinations,
+                      destinations: _destinations,
                     ),
                   ),
                   ),

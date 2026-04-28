@@ -13,6 +13,10 @@ class Nota {
   final String? color;
   // Etiquetas de la nota
   final List<String> etiquetas;
+  // Campos de categoría
+  final int? categoriaId;
+  final String? categoriaNombre;
+  final String? categoriaColor;
 
   Nota({
     this.id,
@@ -25,6 +29,9 @@ class Nota {
     this.esAnclada = false,
     this.color,
     this.etiquetas = const [],
+    this.categoriaId,
+    this.categoriaNombre,
+    this.categoriaColor,
   });
 
   // De Spring Boot (JSON) -> a Flutter (Objeto)
@@ -43,6 +50,10 @@ class Nota {
       color: json['color'],
       // Las etiquetas se almacenan como string separado por comas en el backend
       etiquetas: _parsearEtiquetas(json['etiquetas']),
+      // Campos de categoría del backend
+      categoriaId: json['categoriaId'],
+      categoriaNombre: json['categoriaNombre'],
+      categoriaColor: json['categoriaColor'],
     );
   }
 
@@ -54,6 +65,8 @@ class Nota {
       'color': color,
       // Serializar la lista como string separado por comas
       'etiquetas': etiquetas.isEmpty ? null : etiquetas.join(','),
+      // Incluir categoría si está seleccionada
+      'categoriaId': categoriaId,
     };
   }
 

@@ -24,6 +24,7 @@ class NotesNotifier extends AsyncNotifier<List<Nota>> {
       nuevaNota.contenido,
       color: nuevaNota.color,
       etiquetas: nuevaNota.etiquetas,
+      categoriaId: nuevaNota.categoriaId,
     );
 
     final notasActuales = state.value ?? [];
@@ -41,6 +42,7 @@ class NotesNotifier extends AsyncNotifier<List<Nota>> {
       notaActualizada.contenido,
       color: notaActualizada.color,
       etiquetas: notaActualizada.etiquetas,
+      categoriaId: notaActualizada.categoriaId,
     );
 
     final notasActuales = state.value ?? [];
@@ -80,6 +82,9 @@ class NotesNotifier extends AsyncNotifier<List<Nota>> {
         esAnclada: nota.esAnclada,
         color: nota.color,
         etiquetas: nota.etiquetas,
+        categoriaId: nota.categoriaId,
+        categoriaNombre: nota.categoriaNombre,
+        categoriaColor: nota.categoriaColor,
       );
     }).toList();
     state = AsyncData(nuevasNotas);
@@ -118,6 +123,9 @@ class NotesNotifier extends AsyncNotifier<List<Nota>> {
                  esAnclada: estadoAnclado,
                  color: nota.color,
                  etiquetas: nota.etiquetas,
+                 categoriaId: nota.categoriaId,
+                 categoriaNombre: nota.categoriaNombre,
+                 categoriaColor: nota.categoriaColor,
               );
            }
            return nota;

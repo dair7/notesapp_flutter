@@ -10,6 +10,7 @@ class NotasService {
     String contenido, {
     String? color,
     List<String> etiquetas = const [],
+    int? categoriaId,
   }) async {
     final response = await ApiClient.post(
       '/api/notas/$usuarioId',
@@ -18,6 +19,7 @@ class NotasService {
         'contenido': contenido,
         'color': color,
         'etiquetas': etiquetas.isEmpty ? null : etiquetas.join(','),
+        'categoriaId': categoriaId,
       },
     );
 
@@ -72,6 +74,7 @@ class NotasService {
     String contenido, {
     String? color,
     List<String> etiquetas = const [],
+    int? categoriaId,
   }) async {
     final response = await ApiClient.put(
       '/api/notas/$notaId',
@@ -80,6 +83,7 @@ class NotasService {
         'contenido': contenido,
         'color': color,
         'etiquetas': etiquetas.isEmpty ? null : etiquetas.join(','),
+        'categoriaId': categoriaId,
       },
     );
 

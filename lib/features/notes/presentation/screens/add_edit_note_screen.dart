@@ -13,6 +13,7 @@ import 'package:notes_app/core/enums/estado_note_type.dart';
 import 'package:notes_app/features/notes/presentation/providers/notes_provider.dart';
 import 'package:notes_app/features/reminders/presentation/screens/add_reminder_screen.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:notes_app/features/categories/presentation/providers/categories_provider.dart';
 
 // ── Rango de texto con formato ───────────────────────────────
 class _Rango {
@@ -430,6 +431,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
   bool _merging    = false; // guard para evitar fusiones re-entrantes
   bool _fusionando = false; // evita que didChangeMetrics llame unfocus() durante merge
   List<String> _etiquetas = [];
+  int? _categoriaIdSeleccionada;
   final ImagePicker _picker = ImagePicker();
   _Bloque? _comentarioActivo; // bloque cuyo comentario está siendo editado
   OverlayEntry? _overlayEntry; // barra flotante de imagen activa
@@ -625,6 +627,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
         estado: widget.notaToEdit?.estado ?? EstadoNoteType.ACTIVA,
         color: null,
         etiquetas: _etiquetas,
+        categoriaId: _categoriaIdSeleccionada,
       );
       if (esEdicion) {
         await ref.read(notesProvider.notifier).updateNota(nota);
@@ -1084,6 +1087,7 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
     }
     _normalizarBloques();
     _etiquetas = List<String>.from(widget.notaToEdit?.etiquetas ?? []);
+    _categoriaIdSeleccionada = widget.notaToEdit?.categoriaId;
     _etiquetaController.addListener(() => setState(() {}));
     _scrollController.addListener(_ocultarBarraFlotante);
     Future.microtask(_actualizarContador);
@@ -1195,6 +1199,12 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
           icon: Icon(Icons.share_outlined, color: cs.onSurface),
           tooltip: 'Compartir',
           onPressed: _compartirNota,
+        ),
+        // Categoría (Carpeta)
+        IconButton(
+          icon: Icon(Icons.folder_open_rounded, color: cs.onSurface),
+          tooltip: 'Categoría',
+          onPressed: _mostrarSelectorCategoria,
         ),
         if (widget.notaToEdit?.id != null)
           IconButton(
@@ -1833,6 +1843,118 @@ class _AddEditNoteScreenState extends ConsumerState<AddEditNoteScreen>
         backgroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
         side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
       )).toList(),
+    );
+  }
+
+  void _mostrarSelectorCategoria() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        final cs = Theme.of(context).colorScheme;
+        return Consumer(
+          builder: (context, ref, child) {
+            final categoriesAsync = ref.watch(categoriasNotifierProvider);
+
+            return Container(
+              padding: const EdgeInsets.only(top: 20, bottom: 20),
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    child: Text(
+                      'Seleccionar Categoría',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: categoriesAsync.when(
+                      data: (categorias) {
+                        if (categorias.isEmpty) {
+                          return Center(
+                            child: Text(
+                              'No hay categorías disponibles',
+                              style: TextStyle(color: cs.onSurfaceVariant),
+                            ),
+                          );
+                        }
+
+                        return ListView.builder(
+                          itemCount: categorias.length + 1,
+                          itemBuilder: (context, index) {
+                            if (index == 0) {
+                              return ListTile(
+                                leading: Icon(Icons.close, color: cs.error),
+                                title: const Text('Sin categoría'),
+                                selected: _categoriaIdSeleccionada == null,
+                                selectedTileColor: cs.primary.withValues(alpha: 0.1),
+                                onTap: () {
+                                  setState(() {
+                                    _categoriaIdSeleccionada = null;
+                                  });
+                                  Navigator.pop(context);
+                                  _ejecutarAutoGuardado();
+                                },
+                              );
+                            }
+
+                            final categoria = categorias[index - 1];
+                            Color? categoryColor;
+                            if (categoria.colorHex != null && categoria.colorHex!.isNotEmpty) {
+                              try {
+                                final hexCode = categoria.colorHex!.replaceAll('#', '');
+                                categoryColor = Color(int.parse('FF$hexCode', radix: 16));
+                              } catch (_) {}
+                            }
+
+                            return ListTile(
+                              leading: Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: categoryColor ?? cs.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              title: Text(categoria.nombre),
+                              selected: _categoriaIdSeleccionada == categoria.id,
+                              selectedTileColor: cs.primary.withValues(alpha: 0.1),
+                              onTap: () {
+                                setState(() {
+                                  _categoriaIdSeleccionada = categoria.id;
+                                });
+                                Navigator.pop(context);
+                                _ejecutarAutoGuardado();
+                              },
+                            );
+                          },
+                        );
+                      },
+                      loading: () => const Center(child: CircularProgressIndicator()),
+                      error: (err, stack) => Center(
+                        child: Text(
+                          'Error al cargar categorías',
+                          style: TextStyle(color: cs.error),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

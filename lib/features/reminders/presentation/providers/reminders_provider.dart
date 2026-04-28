@@ -5,7 +5,6 @@ import 'package:notes_app/core/network/api_client.dart';
 import 'package:notes_app/core/services/notification_service.dart';
 
 class RemindersNotifier extends AsyncNotifier<List<Recordatorio>> {
-  
   @override
   Future<List<Recordatorio>> build() async {
     final userId = await ApiClient.getUserId();
@@ -27,10 +26,22 @@ class RemindersNotifier extends AsyncNotifier<List<Recordatorio>> {
   }
 
   /// Agregar una tarea
-  Future<void> addRecordatorio(int notaId, DateTime fecha, Prioridad prioridad) async {
-    final nuevo = await RecordatoriosService.crearRecordatorio(notaId, fecha, prioridad);
+  Future<void> addRecordatorio(
+    int notaId,
+    DateTime fecha,
+    Prioridad prioridad,
+  ) async {
+    final nuevo = await RecordatoriosService.crearRecordatorio(
+      notaId,
+      fecha,
+      prioridad,
+    );
     // Programar notificación local para la fecha del recordatorio
     if (nuevo.id != null) {
+      await NotificationService.notificarAhora(
+        titulo: 'Tarea Programada',
+        cuerpo: 'Recordatorio configurado para: ${nuevo.notaTitulo}',
+      );
       await NotificationService.programar(
         id: nuevo.id!,
         titutoNota: nuevo.notaTitulo ?? 'Recordatorio de nota',
@@ -43,9 +54,16 @@ class RemindersNotifier extends AsyncNotifier<List<Recordatorio>> {
 
   /// Actualizar la fecha de un recordatorio
   Future<void> actualizarFecha(int idRecordatorio, DateTime nuevaFecha) async {
-    final updated = await RecordatoriosService.actualizarFecha(idRecordatorio, nuevaFecha);
+    final updated = await RecordatoriosService.actualizarFecha(
+      idRecordatorio,
+      nuevaFecha,
+    );
     // Cancelar la notificación anterior y reprogramar con la nueva fecha
     await NotificationService.cancelar(idRecordatorio);
+    await NotificationService.notificarAhora(
+      titulo: 'Tarea Actualizada',
+      cuerpo: 'Nueva hora para: ${updated.notaTitulo}',
+    );
     await NotificationService.programar(
       id: idRecordatorio,
       titutoNota: updated.notaTitulo ?? 'Recordatorio de nota',
@@ -78,6 +96,7 @@ class RemindersNotifier extends AsyncNotifier<List<Recordatorio>> {
   }
 }
 
-final remindersProvider = AsyncNotifierProvider<RemindersNotifier, List<Recordatorio>>(() {
-  return RemindersNotifier();
-});
+final remindersProvider =
+    AsyncNotifierProvider<RemindersNotifier, List<Recordatorio>>(() {
+      return RemindersNotifier();
+    });

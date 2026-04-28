@@ -17,7 +17,7 @@ class NotificationService {
 
   // Offsets para evitar colisión de IDs entre tipos de notificación
   static const int _offsetAnticipada = 1000000;
-  static const int _offsetVencida    = 2000000;
+  static const int _offsetVencida = 2000000;
 
   /// Inicializa el plugin — llamar una vez en main()
   static Future<void> inicializar({
@@ -27,9 +27,18 @@ class NotificationService {
 
     navigatorKey = navKey;
     tz_data.initializeTimeZones();
+    // Configurar zona horaria local
+    final String timeZoneName = DateTime.now().timeZoneName;
+    try {
+      tz.setLocalLocation(tz.getLocation(timeZoneName));
+    } catch (_) {
+      // Fallback a UTC si falla la detección
+      tz.setLocalLocation(tz.getLocation('UTC'));
+    }
 
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
 
     final initSettings = InitializationSettings(android: androidSettings);
 
@@ -47,13 +56,15 @@ class NotificationService {
     // Solicitar permiso en Android 13+
     await _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.requestNotificationsPermission();
 
     // Solicitar permiso para alarmas exactas
     await _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.requestExactAlarmsPermission();
 
     // Cancelar notificaciones antiguas para que se reprogramen con el ícono nuevo
@@ -133,11 +144,16 @@ class NotificationService {
     required String cuerpo,
     required DateTime fecha,
   }) async {
+    // Convertimos la fecha local a UTC. Así no dependemos de si la zona horaria
+    // local está bien configurada o no en la librería.
+    final utcDate = fecha.toUtc();
+    final tzDate = tz.TZDateTime.from(utcDate, tz.UTC);
+
     await _plugin.zonedSchedule(
       id,
       titulo,
       cuerpo,
-      tz.TZDateTime.from(fecha, tz.local),
+      tzDate,
       const NotificationDetails(
         android: AndroidNotificationDetails(
           'recordatorios_channel',
@@ -145,13 +161,30 @@ class NotificationService {
           channelDescription: 'Notificaciones de recordatorios de notas',
           importance: Importance.high,
           priority: Priority.high,
-          icon: 'ic_notification',
+          icon: '@mipmap/ic_launcher',
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
+  }
+
+  /// Envía una notificación instantánea (para pruebas)
+  static Future<void> notificarAhora({
+    required String titulo,
+    required String cuerpo,
+  }) async {
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'test_channel',
+        'Pruebas',
+        importance: Importance.max,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+      ),
+    );
+    await _plugin.show(999999, titulo, cuerpo, details);
   }
 
   /// Cancela las tres notificaciones (anticipada, exacta, vencimiento)

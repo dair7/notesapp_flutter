@@ -10,6 +10,7 @@ import 'package:notes_app/core/utils/app_snackbar.dart';
 import 'package:notes_app/core/enums/estado_note_type.dart';
 import 'package:notes_app/features/notes/domain/nota_model.dart';
 import 'package:notes_app/features/notes/presentation/providers/notes_provider.dart';
+import 'package:notes_app/features/categories/presentation/providers/categories_provider.dart';
 import 'package:notes_app/features/reminders/presentation/screens/add_reminder_screen.dart';
 
 import '../widgets/note_editor/controller/note_editor_controller.dart';
@@ -55,6 +56,7 @@ class _AddEditNoteScreenV2State extends ConsumerState<AddEditNoteScreenV2>
   bool         _focusedMode    = false;
   bool         _keyboardVisible = false;
   double       _prevBottomInset = 0;
+  int?         _categoriaId;
 
   final ScrollController _scrollCtrl   = ScrollController();
   final ImagePicker      _picker       = ImagePicker();
@@ -75,6 +77,7 @@ class _AddEditNoteScreenV2State extends ConsumerState<AddEditNoteScreenV2>
       title:      widget.notaToEdit?.titulo    ?? '',
     );
     _tags = List.from(widget.notaToEdit?.etiquetas ?? []);
+    _categoriaId = widget.notaToEdit?.categoriaId;
 
     // Conectar auto-guardado al controller
     _ctrl.onSaveRequested = _doAutoSave;
@@ -153,6 +156,7 @@ class _AddEditNoteScreenV2State extends ConsumerState<AddEditNoteScreenV2>
         estado:        widget.notaToEdit?.estado ?? EstadoNoteType.ACTIVA,
         color:         null,
         etiquetas:     _tags,
+        categoriaId:   _categoriaId,
       );
 
       if (isEdit) {
@@ -383,6 +387,13 @@ class _AddEditNoteScreenV2State extends ConsumerState<AddEditNoteScreenV2>
             onPressed: _doAutoSave,
           ),
 
+        // Categoría (Carpeta)
+        IconButton(
+          icon: Icon(Icons.folder_open_rounded, color: cs.onSurface),
+          tooltip: 'Categoría',
+          onPressed: _mostrarSelectorCategoria,
+        ),
+
         // Compartir
         IconButton(
           icon: Icon(Icons.share_outlined, color: cs.onSurface),
@@ -552,6 +563,118 @@ class _AddEditNoteScreenV2State extends ConsumerState<AddEditNoteScreenV2>
           ],
         ),
       ),
+    );
+  }
+
+  void _mostrarSelectorCategoria() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        final cs = Theme.of(context).colorScheme;
+        return Consumer(
+          builder: (context, ref, child) {
+            final categoriesAsync = ref.watch(categoriasNotifierProvider);
+
+            return Container(
+              padding: const EdgeInsets.only(top: 20, bottom: 20),
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    child: Text(
+                      'Seleccionar Categoría',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: categoriesAsync.when(
+                      data: (categorias) {
+                        if (categorias.isEmpty) {
+                          return Center(
+                            child: Text(
+                              'No hay categorías disponibles',
+                              style: TextStyle(color: cs.onSurfaceVariant),
+                            ),
+                          );
+                        }
+
+                        return ListView.builder(
+                          itemCount: categorias.length + 1,
+                          itemBuilder: (context, index) {
+                            if (index == 0) {
+                              return ListTile(
+                                leading: Icon(Icons.close, color: cs.error),
+                                title: const Text('Sin categoría'),
+                                selected: _categoriaId == null,
+                                selectedTileColor: cs.primary.withValues(alpha: 0.1),
+                                onTap: () {
+                                  setState(() {
+                                    _categoriaId = null;
+                                  });
+                                  Navigator.pop(context);
+                                  _doAutoSave();
+                                },
+                              );
+                            }
+
+                            final categoria = categorias[index - 1];
+                            Color? categoryColor;
+                            if (categoria.colorHex != null && categoria.colorHex!.isNotEmpty) {
+                              try {
+                                final hexCode = categoria.colorHex!.replaceAll('#', '');
+                                categoryColor = Color(int.parse('FF$hexCode', radix: 16));
+                              } catch (_) {}
+                            }
+
+                            return ListTile(
+                              leading: Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: categoryColor ?? cs.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              title: Text(categoria.nombre),
+                              selected: _categoriaId == categoria.id,
+                              selectedTileColor: cs.primary.withValues(alpha: 0.1),
+                              onTap: () {
+                                setState(() {
+                                  _categoriaId = categoria.id;
+                                });
+                                Navigator.pop(context);
+                                _doAutoSave();
+                              },
+                            );
+                          },
+                        );
+                      },
+                      loading: () => const Center(child: CircularProgressIndicator()),
+                      error: (err, stack) => Center(
+                        child: Text(
+                          'Error al cargar categorías',
+                          style: TextStyle(color: cs.error),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

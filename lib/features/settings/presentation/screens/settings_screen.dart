@@ -5,25 +5,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notes_app/features/auth/domain/usuario_model.dart';
 import 'package:notes_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:notes_app/features/auth/presentation/screens/login_screen.dart';
-import 'package:notes_app/core/enums/role_type.dart';
 import 'package:notes_app/features/notes/presentation/providers/notes_provider.dart';
 import 'package:notes_app/features/settings/presentation/providers/settings_provider.dart';
 import 'package:notes_app/core/enums/estado_note_type.dart';
 
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
-  // ── Etiqueta legible del rol ─────────────────────────
-  String _roleLabel(RoleType role) {
-    switch (role) {
-      case RoleType.SUPER_ADMIN: return 'Super Admin';
-      case RoleType.ADMIN:       return 'Administrador';
-      case RoleType.USER:        return 'Usuario';
-    }
-  }
-
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  @override
+  Widget build(BuildContext context) {
     final authState  = ref.watch(authProvider);
     final usuario    = authState.usuario;
     final settings   = ref.watch(settingsProvider);
@@ -109,7 +104,7 @@ class SettingsScreen extends ConsumerWidget {
                   width: double.infinity,
                   height: 52,
                   child: OutlinedButton.icon(
-                    onPressed: () => _confirmarLogout(context, ref),
+                    onPressed: _confirmarLogout,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.redAccent,
                       side: const BorderSide(color: Colors.redAccent),
@@ -143,7 +138,6 @@ class SettingsScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════════════
   Widget _buildProfileCard(Usuario? usuario, BuildContext context, Color accentColor) {
     final inicial = (usuario?.nombre ?? 'U').substring(0, 1).toUpperCase();
-    final rol     = usuario?.role ?? RoleType.USER;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -187,18 +181,6 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 10),
-
-          // Badge rol
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-            ),
-            child: Text(_roleLabel(rol),
-              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-          ),
         ],
       ),
     );
@@ -651,7 +633,10 @@ class SettingsScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════════════
   //  LOGOUT
   // ═══════════════════════════════════════════════════════
-  void _confirmarLogout(BuildContext context, WidgetRef ref) {
+  void _confirmarLogout() {
+    // Guardamos el notifier aquí, en el State, donde ref siempre es válido.
+    final authNotifier = ref.read(authProvider.notifier);
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -666,8 +651,8 @@ class SettingsScreen extends ConsumerWidget {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await ref.read(authProvider.notifier).logout();
-              if (context.mounted) {
+              await authNotifier.logout();
+              if (mounted) {
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (_) => const LoginScreen()),

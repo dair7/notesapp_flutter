@@ -8,6 +8,8 @@ import 'package:notes_app/features/notes/presentation/screens/add_edit_note_scre
 import 'package:notes_app/core/enums/estado_note_type.dart';
 import 'package:notes_app/features/settings/presentation/providers/settings_provider.dart';
 import 'package:notes_app/core/utils/note_preview.dart';
+import 'package:notes_app/features/categories/presentation/providers/categories_provider.dart';
+import 'package:notes_app/features/categories/domain/categoria_model.dart';
 
 class NotesListScreen extends ConsumerStatefulWidget {
   const NotesListScreen({super.key});
@@ -22,19 +24,24 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   EstadoNoteType _currentFilter = EstadoNoteType.ACTIVA;
   bool _isSearching = false;
   bool _isGridView = false;
+  int? _categoriaFiltro; // null = todas las categorías
 
   // Multi-selección
   final Set<int> _selectedNoteIds = {};
 
   // Cambios pendientes de confirmar al backend: notaId → {nuevoEstado, timer}
-  final Map<int, ({String nuevoEstado, String estadoAnterior, Timer timer})> _pendientes = {};
+  final Map<int, ({String nuevoEstado, String estadoAnterior, Timer timer})>
+  _pendientes = {};
 
   @override
   void dispose() {
     // Confirmar al backend cualquier cambio pendiente antes de salir
     for (final entry in _pendientes.entries) {
       entry.value.timer.cancel();
-      ref.read(notesProvider.notifier).cambiarEstado(entry.key, entry.value.nuevoEstado).ignore();
+      ref
+          .read(notesProvider.notifier)
+          .cambiarEstado(entry.key, entry.value.nuevoEstado)
+          .ignore();
     }
     _pendientes.clear();
     _searchController.dispose();
@@ -43,12 +50,23 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
 
   List<Nota> _filtrar(List<Nota> notas, EstadoNoteType estado) {
     var filtradas = notas.where((n) => n.estado == estado).toList();
+
+    // Filtrar por categoría si está seleccionada
+    if (_categoriaFiltro != null) {
+      filtradas = filtradas
+          .where((n) => n.categoriaId == _categoriaFiltro)
+          .toList();
+    }
+
     if (_searchQuery.isNotEmpty) {
       final q = _searchQuery.toLowerCase();
-      filtradas = filtradas.where((n) =>
-        n.titulo.toLowerCase().contains(q) ||
-        previewContenidoNota(n.contenido).toLowerCase().contains(q)
-      ).toList();
+      filtradas = filtradas
+          .where(
+            (n) =>
+                n.titulo.toLowerCase().contains(q) ||
+                previewContenidoNota(n.contenido).toLowerCase().contains(q),
+          )
+          .toList();
     }
     filtradas.sort((a, b) {
       if (a.esAnclada && !b.esAnclada) return -1;
@@ -61,14 +79,29 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   }
 
   String _formatFecha(DateTime date) {
-    final meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    final meses = [
+      'Ene',
+      'Feb',
+      'Mar',
+      'Abr',
+      'May',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dic',
+    ];
     return "${date.day} ${meses[date.month - 1]}, ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
   }
 
   void _cambiarEstado(Nota nota, String nuevoEstado, String mensaje) async {
     if (nota.id == null) return;
     try {
-      await ref.read(notesProvider.notifier).cambiarEstado(nota.id!, nuevoEstado);
+      await ref
+          .read(notesProvider.notifier)
+          .cambiarEstado(nota.id!, nuevoEstado);
       if (mounted) AppSnackBar.exito(context, mensaje);
     } catch (e) {
       if (mounted) AppSnackBar.errorDesdeExcepcion(context, e);
@@ -77,7 +110,12 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
 
   // UI optimista: cambio local inmediato → timer 4s → commit al backend
   // Si el usuario deshace antes del timer: 0 llamadas al backend
-  void _moverConDeshacer(Nota nota, String nuevoEstado, String estadoAnterior, String mensaje) {
+  void _moverConDeshacer(
+    Nota nota,
+    String nuevoEstado,
+    String estadoAnterior,
+    String mensaje,
+  ) {
     if (nota.id == null) return;
 
     // Cancelar timer previo de esta nota si existe
@@ -92,24 +130,34 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       // Usuario deshizo → cancelar timer y revertir localmente (0 llamadas API)
       _pendientes[nota.id!]?.timer.cancel();
       _pendientes.remove(nota.id!);
-      ref.read(notesProvider.notifier).cambiarEstadoLocal(nota.id!, estadoAnterior);
+      ref
+          .read(notesProvider.notifier)
+          .cambiarEstadoLocal(nota.id!, estadoAnterior);
     });
 
     // 3. Timer de 4s — al expirar se confirma en el backend
     final timer = Timer(const Duration(seconds: 4), () async {
       _pendientes.remove(nota.id!);
       try {
-        await ref.read(notesProvider.notifier).cambiarEstado(nota.id!, nuevoEstado);
+        await ref
+            .read(notesProvider.notifier)
+            .cambiarEstado(nota.id!, nuevoEstado);
       } catch (e) {
         // Si falla el backend, revertir la UI
         if (mounted) {
-          ref.read(notesProvider.notifier).cambiarEstadoLocal(nota.id!, estadoAnterior);
+          ref
+              .read(notesProvider.notifier)
+              .cambiarEstadoLocal(nota.id!, estadoAnterior);
           AppSnackBar.error(context, 'No se pudo guardar el cambio');
         }
       }
     });
 
-    _pendientes[nota.id!] = (nuevoEstado: nuevoEstado, estadoAnterior: estadoAnterior, timer: timer);
+    _pendientes[nota.id!] = (
+      nuevoEstado: nuevoEstado,
+      estadoAnterior: estadoAnterior,
+      timer: timer,
+    );
   }
 
   void _eliminarPermanente(Nota nota) {
@@ -117,21 +165,36 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Eliminar permanentemente', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text('¿Eliminar "${nota.titulo}" para siempre?\nEsta acción no se puede deshacer.'),
+        title: const Text(
+          'Eliminar permanentemente',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          '¿Eliminar "${nota.titulo}" para siempre?\nEsta acción no se puede deshacer.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+          ),
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
               try {
                 await ref.read(notesProvider.notifier).deleteNota(nota.id);
-                if (mounted) AppSnackBar.exito(context, 'Nota eliminada permanentemente');
+                if (mounted)
+                  AppSnackBar.exito(context, 'Nota eliminada permanentemente');
               } catch (e) {
                 if (mounted) AppSnackBar.errorDesdeExcepcion(context, e);
               }
             },
-            child: const Text('Eliminar', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Eliminar',
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -165,11 +228,19 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
               // ── LISTA O CUADRÍCULA ───────────────────────
               Expanded(
                 child: notesAsync.when(
-                  loading: () => Center(child: CircularProgressIndicator(color: accentColor)),
-                  error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.redAccent))),
+                  loading: () => Center(
+                    child: CircularProgressIndicator(color: accentColor),
+                  ),
+                  error: (e, _) => Center(
+                    child: Text(
+                      'Error: $e',
+                      style: const TextStyle(color: Colors.redAccent),
+                    ),
+                  ),
                   data: (todasLasNotas) {
                     final filtradas = _filtrar(todasLasNotas, _currentFilter);
-                    if (filtradas.isEmpty) return _buildEmptyState(cs, _currentFilter);
+                    if (filtradas.isEmpty)
+                      return _buildEmptyState(cs, _currentFilter);
                     return _isGridView
                         ? _buildGrid(filtradas, cs, accentColor)
                         : _buildLista(filtradas, cs, accentColor);
@@ -181,7 +252,9 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
 
           // ── BARRA SELECCIÓN ANIMADA ──────────────────────
           Positioned(
-            bottom: 0, left: 0, right: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
             child: AnimatedSlide(
               offset: isSelectionMode ? Offset.zero : const Offset(0, 1),
               duration: const Duration(milliseconds: 280),
@@ -201,7 +274,11 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   // ══════════════════════════════════════════════════════════
   //  HEADER NORMAL
   // ══════════════════════════════════════════════════════════
-  Widget _buildHeader(ColorScheme cs, Color accentColor, AsyncValue<List<Nota>> notesAsync) {
+  Widget _buildHeader(
+    ColorScheme cs,
+    Color accentColor,
+    AsyncValue<List<Nota>> notesAsync,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(top: 60, left: 24, right: 8, bottom: 4),
       child: Row(
@@ -212,17 +289,34 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Mis Notas',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: cs.onSurface)),
+                  Text(
+                    'Mis Notas',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: cs.onSurface,
+                    ),
+                  ),
                   const SizedBox(height: 3),
                   notesAsync.when(
-                    loading: () => Text('Cargando...', style: TextStyle(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 13)),
+                    loading: () => Text(
+                      'Cargando...',
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.4),
+                        fontSize: 13,
+                      ),
+                    ),
                     error: (_, _) => const SizedBox.shrink(),
                     data: (notas) {
-                      final count = notas.where((n) => n.estado == _currentFilter).length;
+                      final count = notas
+                          .where((n) => n.estado == _currentFilter)
+                          .length;
                       return Text(
                         '$count nota${count == 1 ? '' : 's'}',
-                        style: TextStyle(color: cs.onSurface.withValues(alpha: 0.45), fontSize: 13),
+                        style: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.45),
+                          fontSize: 13,
+                        ),
                       );
                     },
                   ),
@@ -238,12 +332,22 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerLowest,
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
+                  boxShadow: [
+                    BoxShadow(
+                      color: cs.shadow.withValues(alpha: 0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
                     const SizedBox(width: 12),
-                    Icon(Icons.search_rounded, size: 18, color: cs.onSurface.withValues(alpha: 0.4)),
+                    Icon(
+                      Icons.search_rounded,
+                      size: 18,
+                      color: cs.onSurface.withValues(alpha: 0.4),
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: TextField(
@@ -253,7 +357,10 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                         style: TextStyle(fontSize: 14, color: cs.onSurface),
                         decoration: InputDecoration(
                           hintText: 'Buscar notas...',
-                          hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 14),
+                          hintStyle: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.4),
+                            fontSize: 14,
+                          ),
                           border: InputBorder.none,
                           isDense: true,
                         ),
@@ -295,8 +402,155 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
               tooltip: _isGridView ? 'Vista lista' : 'Vista cuadrícula',
               onPressed: () => setState(() => _isGridView = !_isGridView),
             ),
+
+          // Icono de categorías (carpeta)
+          if (!_isSearching)
+            IconButton(
+              icon: Icon(
+                Icons.folder_outlined,
+                color: _categoriaFiltro != null
+                    ? accentColor
+                    : cs.onSurface.withValues(alpha: 0.5),
+                size: 22,
+              ),
+              tooltip: 'Filtrar por categoría',
+              onPressed: () =>
+                  _mostrarFiltroCategorias(context, cs, accentColor),
+            ),
         ],
       ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  MODAL FILTRO CATEGORÍAS
+  // ══════════════════════════════════════════════════════════
+  void _mostrarFiltroCategorias(
+    BuildContext context,
+    ColorScheme cs,
+    Color accentColor,
+  ) {
+    final categoriasAsync = ref.read(categoriasNotifierProvider);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: cs.surfaceContainerLowest,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return categoriasAsync.when(
+          data: (categorias) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.folder_outlined,
+                          color: accentColor,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Filtrar por categoría',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // Opción "Todas las categorías"
+                    ListTile(
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.clear_all,
+                          color: cs.onSurfaceVariant,
+                          size: 20,
+                        ),
+                      ),
+                      title: const Text('Todas las categorías'),
+                      trailing: _categoriaFiltro == null
+                          ? Icon(Icons.check_circle, color: accentColor)
+                          : null,
+                      onTap: () {
+                        setState(() => _categoriaFiltro = null);
+                        Navigator.pop(context);
+                      },
+                    ),
+                    const Divider(),
+                    // Lista de categorías
+                    if (categorias.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(
+                          child: Text('No hay categorías disponibles'),
+                        ),
+                      )
+                    else
+                      Flexible(
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: categorias.length,
+                          itemBuilder: (context, index) {
+                            final categoria = categorias[index];
+                            final isSelected = _categoriaFiltro == categoria.id;
+                            final color = _parseColor(categoria.colorHex);
+                            return ListTile(
+                              leading: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.2),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: color, width: 2),
+                                ),
+                                child: Center(
+                                  child: Container(
+                                    width: 16,
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color: color,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              title: Text(categoria.nombre),
+                              trailing: isSelected
+                                  ? Icon(Icons.check_circle, color: accentColor)
+                                  : null,
+                              onTap: () {
+                                setState(() => _categoriaFiltro = categoria.id);
+                                Navigator.pop(context);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, __) =>
+              const Center(child: Text('Error al cargar categorías')),
+        );
+      },
     );
   }
 
@@ -319,7 +573,11 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
           Expanded(
             child: Text(
               '${_selectedNoteIds.length} seleccionado${_selectedNoteIds.length == 1 ? '' : 's'}',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: cs.onSurface,
+              ),
             ),
           ),
           IconButton(
@@ -349,7 +607,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   // ══════════════════════════════════════════════════════════
   Widget _buildFilterChips(ColorScheme cs, Color accentColor) {
     final filtros = [
-      (EstadoNoteType.ACTIVA,    'Activas'),
+      (EstadoNoteType.ACTIVA, 'Activas'),
       (EstadoNoteType.ARCHIVADA, 'Archivadas'),
       (EstadoNoteType.ELIMINADA, 'Papelera'),
     ];
@@ -373,10 +631,18 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                     color: isActive ? accentColor : cs.surfaceContainerLowest,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: isActive ? accentColor : cs.outlineVariant.withValues(alpha: 0.4),
+                      color: isActive
+                          ? accentColor
+                          : cs.outlineVariant.withValues(alpha: 0.4),
                     ),
                     boxShadow: isActive
-                        ? [BoxShadow(color: accentColor.withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 3))]
+                        ? [
+                            BoxShadow(
+                              color: accentColor.withValues(alpha: 0.25),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ]
                         : [],
                   ),
                   child: Center(
@@ -385,7 +651,9 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: isActive ? Colors.white : cs.onSurface.withValues(alpha: 0.6),
+                        color: isActive
+                            ? Colors.white
+                            : cs.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
                   ),
@@ -394,6 +662,115 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             ),
           );
         }).toList(),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  CHIPS DE CATEGORÍA
+  // ══════════════════════════════════════════════════════════
+  Widget _buildCategoryChips(ColorScheme cs) {
+    final categoriasAsync = ref.watch(categoriasNotifierProvider);
+
+    return categoriasAsync.when(
+      data: (categorias) {
+        if (categorias.isEmpty) return const SizedBox.shrink();
+
+        return Container(
+          height: 40,
+          margin: const EdgeInsets.only(top: 8),
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            itemCount: categorias.length + 1, // +1 para "Todas"
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                // Chip "Todas"
+                final isSelected = _categoriaFiltro == null;
+                return _buildCategoryChip(
+                  'Todas',
+                  null,
+                  isSelected,
+                  cs,
+                  () => setState(() => _categoriaFiltro = null),
+                );
+              }
+
+              final categoria = categorias[index - 1];
+              final isSelected = _categoriaFiltro == categoria.id;
+              return _buildCategoryChip(
+                categoria.nombre,
+                categoria.colorHex,
+                isSelected,
+                cs,
+                () => setState(() => _categoriaFiltro = categoria.id),
+              );
+            },
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
+  Widget _buildCategoryChip(
+    String label,
+    String? colorHex,
+    bool isSelected,
+    ColorScheme cs,
+    VoidCallback onTap,
+  ) {
+    final color = colorHex != null
+        ? _parseColor(colorHex)
+        : cs.onSurface.withValues(alpha: 0.5);
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? color.withValues(alpha: 0.2)
+                : cs.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected
+                  ? color
+                  : cs.outlineVariant.withValues(alpha: 0.3),
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (colorHex != null) ...[
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: isSelected
+                      ? color
+                      : cs.onSurface.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -427,18 +804,42 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 72, height: 72,
+            width: 72,
+            height: 72,
             decoration: BoxDecoration(
               color: cs.surfaceContainerLowest,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+              boxShadow: [
+                BoxShadow(
+                  color: cs.shadow.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            child: Icon(icono, size: 34, color: cs.onSurface.withValues(alpha: 0.3)),
+            child: Icon(
+              icono,
+              size: 34,
+              color: cs.onSurface.withValues(alpha: 0.3),
+            ),
           ),
           const SizedBox(height: 16),
-          Text(titulo, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: cs.onSurface.withValues(alpha: 0.6))),
+          Text(
+            titulo,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurface.withValues(alpha: 0.6),
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(subtitulo, style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.35))),
+          Text(
+            subtitulo,
+            style: TextStyle(
+              fontSize: 13,
+              color: cs.onSurface.withValues(alpha: 0.35),
+            ),
+          ),
         ],
       ),
     );
@@ -484,17 +885,37 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   // ══════════════════════════════════════════════════════════
   //  SWIPE WRAPPER (solo para lista)
   // ══════════════════════════════════════════════════════════
-  Widget _buildSwipeableCard(Nota nota, EstadoNoteType estado, ColorScheme cs, Color accentColor) {
+  Widget _buildSwipeableCard(
+    Nota nota,
+    EstadoNoteType estado,
+    ColorScheme cs,
+    Color accentColor,
+  ) {
     if (estado == EstadoNoteType.ACTIVA) {
       return Dismissible(
         key: Key('nota_${nota.id}'),
         background: _swipeBg(Colors.orange, Icons.archive, 'Archivar', true),
-        secondaryBackground: _swipeBg(Colors.redAccent, Icons.delete, 'Papelera', false),
+        secondaryBackground: _swipeBg(
+          Colors.redAccent,
+          Icons.delete,
+          'Papelera',
+          false,
+        ),
         confirmDismiss: (dir) async {
           if (dir == DismissDirection.startToEnd) {
-            _moverConDeshacer(nota, 'ARCHIVADA', 'ACTIVA', '"${nota.titulo}" archivada');
+            _moverConDeshacer(
+              nota,
+              'ARCHIVADA',
+              'ACTIVA',
+              '"${nota.titulo}" archivada',
+            );
           } else {
-            _moverConDeshacer(nota, 'ELIMINADA', 'ACTIVA', '"${nota.titulo}" movida a papelera');
+            _moverConDeshacer(
+              nota,
+              'ELIMINADA',
+              'ACTIVA',
+              '"${nota.titulo}" movida a papelera',
+            );
           }
           return false;
         },
@@ -504,12 +925,27 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       return Dismissible(
         key: Key('nota_${nota.id}'),
         background: _swipeBg(Colors.green, Icons.restore, 'Restaurar', true),
-        secondaryBackground: _swipeBg(Colors.redAccent, Icons.delete, 'Papelera', false),
+        secondaryBackground: _swipeBg(
+          Colors.redAccent,
+          Icons.delete,
+          'Papelera',
+          false,
+        ),
         confirmDismiss: (dir) async {
           if (dir == DismissDirection.startToEnd) {
-            _moverConDeshacer(nota, 'ACTIVA', 'ARCHIVADA', '"${nota.titulo}" restaurada');
+            _moverConDeshacer(
+              nota,
+              'ACTIVA',
+              'ARCHIVADA',
+              '"${nota.titulo}" restaurada',
+            );
           } else {
-            _moverConDeshacer(nota, 'ELIMINADA', 'ARCHIVADA', '"${nota.titulo}" movida a papelera');
+            _moverConDeshacer(
+              nota,
+              'ELIMINADA',
+              'ARCHIVADA',
+              '"${nota.titulo}" movida a papelera',
+            );
           }
           return false;
         },
@@ -519,10 +955,20 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       return Dismissible(
         key: Key('nota_${nota.id}'),
         background: _swipeBg(Colors.green, Icons.restore, 'Restaurar', true),
-        secondaryBackground: _swipeBg(Colors.red, Icons.delete_forever, 'Eliminar', false),
+        secondaryBackground: _swipeBg(
+          Colors.red,
+          Icons.delete_forever,
+          'Eliminar',
+          false,
+        ),
         confirmDismiss: (dir) async {
           if (dir == DismissDirection.startToEnd) {
-            _moverConDeshacer(nota, 'ACTIVA', 'ELIMINADA', '"${nota.titulo}" restaurada');
+            _moverConDeshacer(
+              nota,
+              'ACTIVA',
+              'ELIMINADA',
+              '"${nota.titulo}" restaurada',
+            );
           } else {
             _eliminarPermanente(nota);
           }
@@ -544,8 +990,30 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: isLeft
-            ? [Icon(icon, color: color, size: 20), const SizedBox(width: 6), Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13))]
-            : [Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13)), const SizedBox(width: 6), Icon(icon, color: color, size: 20)],
+            ? [
+                Icon(icon, color: color, size: 20),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ]
+            : [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(icon, color: color, size: 20),
+              ],
       ),
     );
   }
@@ -553,7 +1021,12 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   // ══════════════════════════════════════════════════════════
   //  TARJETA — LISTA
   // ══════════════════════════════════════════════════════════
-  Widget _buildNoteCard(Nota nota, EstadoNoteType estado, ColorScheme cs, Color accentColor) {
+  Widget _buildNoteCard(
+    Nota nota,
+    EstadoNoteType estado,
+    ColorScheme cs,
+    Color accentColor,
+  ) {
     final esPapelera = estado == EstadoNoteType.ELIMINADA;
     final isSelected = _selectedNoteIds.contains(nota.id);
     final isSelectionMode = ref.watch(selectionModeProvider);
@@ -570,13 +1043,19 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
           setState(() {
             if (isSelected) {
               _selectedNoteIds.remove(nota.id);
-              if (_selectedNoteIds.isEmpty) ref.read(selectionModeProvider.notifier).toggle(false);
+              if (_selectedNoteIds.isEmpty)
+                ref.read(selectionModeProvider.notifier).toggle(false);
             } else {
               _selectedNoteIds.add(nota.id!);
             }
           });
         } else if (!esPapelera) {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => AddEditNoteScreenV2(notaToEdit: nota)));
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AddEditNoteScreenV2(notaToEdit: nota),
+            ),
+          );
         }
       },
       child: AnimatedContainer(
@@ -586,16 +1065,24 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
           color: isSelected
               ? accentColor.withValues(alpha: 0.1)
               : esPapelera
-                  ? cs.surfaceContainerLowest.withValues(alpha: 0.6)
-                  : nota.color != null
-                      ? Color(int.parse(nota.color!.replaceFirst('#', 'FF'), radix: 16))
-                      : cs.surfaceContainerLowest,
+              ? cs.surfaceContainerLowest.withValues(alpha: 0.6)
+              : nota.color != null
+              ? Color(int.parse(nota.color!.replaceFirst('#', 'FF'), radix: 16))
+              : cs.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? accentColor : cs.outlineVariant.withValues(alpha: 0.25),
+            color: isSelected
+                ? accentColor
+                : cs.outlineVariant.withValues(alpha: 0.25),
             width: isSelected ? 1.5 : 1,
           ),
-          boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
+          boxShadow: [
+            BoxShadow(
+              color: cs.shadow.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -612,8 +1099,12 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
-                      color: esPapelera ? cs.onSurface.withValues(alpha: 0.35) : cs.onSurface,
-                      decoration: esPapelera ? TextDecoration.lineThrough : null,
+                      color: esPapelera
+                          ? cs.onSurface.withValues(alpha: 0.35)
+                          : cs.onSurface,
+                      decoration: esPapelera
+                          ? TextDecoration.lineThrough
+                          : null,
                     ),
                   ),
                   // Contenido
@@ -625,7 +1116,9 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 13,
-                        color: cs.onSurface.withValues(alpha: esPapelera ? 0.25 : 0.5),
+                        color: cs.onSurface.withValues(
+                          alpha: esPapelera ? 0.25 : 0.5,
+                        ),
                       ),
                     ),
                   ],
@@ -634,36 +1127,107 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                     const SizedBox(height: 6),
                     Wrap(
                       spacing: 4,
-                      children: nota.etiquetas.take(3).map((tag) => Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: cs.onSurface.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          tag,
-                          style: TextStyle(fontSize: 10, color: cs.onSurface.withValues(alpha: 0.6)),
-                        ),
-                      )).toList(),
+                      children: nota.etiquetas
+                          .take(3)
+                          .map(
+                            (tag) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: cs.onSurface.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                tag,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: cs.onSurface.withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
                     ),
                   ],
                   const SizedBox(height: 10),
-                  // Fecha + anclar
-                  Row(
-                    children: [
-                      if (nota.fechaCreacion != null) ...[
-                        Icon(Icons.access_time_rounded, size: 12, color: cs.onSurface.withValues(alpha: 0.3)),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatFecha(nota.fechaCreacion!),
-                          style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.38)),
-                        ),
+                  // Fecha + anclar + categoría
+                  SizedBox(
+                    width: double.infinity,
+                    child: Row(
+                      children: [
+                        if (nota.fechaCreacion != null) ...[
+                          Icon(
+                            Icons.access_time_rounded,
+                            size: 12,
+                            color: cs.onSurface.withValues(alpha: 0.3),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _formatFecha(nota.fechaCreacion!),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: cs.onSurface.withValues(alpha: 0.38),
+                            ),
+                          ),
+                        ],
+                        if (nota.esAnclada) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.push_pin_rounded,
+                            size: 13,
+                            color: accentColor.withValues(alpha: 0.7),
+                          ),
+                        ],
+                        if (nota.categoriaId != null) ...[
+                          const Spacer(),
+                          Container(
+                            margin: const EdgeInsets.only(right: 0),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _parseColor(
+                                nota.categoriaColor,
+                              ).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: _parseColor(
+                                  nota.categoriaColor,
+                                ).withValues(alpha: 0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: _parseColor(nota.categoriaColor),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  nota.categoriaNombre ?? 'Categoría',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: _parseColor(
+                                      nota.categoriaColor,
+                                    ).withValues(alpha: 0.9),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
-                      if (nota.esAnclada) ...[
-                        const SizedBox(width: 8),
-                        Icon(Icons.push_pin_rounded, size: 13, color: accentColor.withValues(alpha: 0.7)),
-                      ],
-                    ],
+                    ),
                   ),
                 ],
               ),
@@ -679,7 +1243,10 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                         setState(() {
                           if (isSelected) {
                             _selectedNoteIds.remove(nota.id);
-                            if (_selectedNoteIds.isEmpty) ref.read(selectionModeProvider.notifier).toggle(false);
+                            if (_selectedNoteIds.isEmpty)
+                              ref
+                                  .read(selectionModeProvider.notifier)
+                                  .toggle(false);
                           } else {
                             _selectedNoteIds.add(nota.id!);
                           }
@@ -691,12 +1258,18 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                           shape: BoxShape.circle,
                           color: isSelected ? accentColor : Colors.transparent,
                           border: Border.all(
-                            color: isSelected ? accentColor : cs.onSurface.withValues(alpha: 0.3),
+                            color: isSelected
+                                ? accentColor
+                                : cs.onSurface.withValues(alpha: 0.3),
                             width: 1.5,
                           ),
                         ),
                         child: isSelected
-                            ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+                            ? const Icon(
+                                Icons.check_rounded,
+                                size: 14,
+                                color: Colors.white,
+                              )
                             : null,
                       ),
                     )
@@ -711,7 +1284,12 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   // ══════════════════════════════════════════════════════════
   //  TARJETA — CUADRÍCULA
   // ══════════════════════════════════════════════════════════
-  Widget _buildGridCard(Nota nota, EstadoNoteType estado, ColorScheme cs, Color accentColor) {
+  Widget _buildGridCard(
+    Nota nota,
+    EstadoNoteType estado,
+    ColorScheme cs,
+    Color accentColor,
+  ) {
     final esPapelera = estado == EstadoNoteType.ELIMINADA;
     final isSelected = _selectedNoteIds.contains(nota.id);
     final isSelectionMode = ref.watch(selectionModeProvider);
@@ -728,13 +1306,19 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
           setState(() {
             if (isSelected) {
               _selectedNoteIds.remove(nota.id);
-              if (_selectedNoteIds.isEmpty) ref.read(selectionModeProvider.notifier).toggle(false);
+              if (_selectedNoteIds.isEmpty)
+                ref.read(selectionModeProvider.notifier).toggle(false);
             } else {
               _selectedNoteIds.add(nota.id!);
             }
           });
         } else if (!esPapelera) {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => AddEditNoteScreenV2(notaToEdit: nota)));
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AddEditNoteScreenV2(notaToEdit: nota),
+            ),
+          );
         }
       },
       child: AnimatedContainer(
@@ -744,16 +1328,24 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
           color: isSelected
               ? accentColor.withValues(alpha: 0.1)
               : esPapelera
-                  ? cs.surfaceContainerLowest.withValues(alpha: 0.6)
-                  : nota.color != null
-                      ? Color(int.parse(nota.color!.replaceFirst('#', 'FF'), radix: 16))
-                      : cs.surfaceContainerLowest,
+              ? cs.surfaceContainerLowest.withValues(alpha: 0.6)
+              : nota.color != null
+              ? Color(int.parse(nota.color!.replaceFirst('#', 'FF'), radix: 16))
+              : cs.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? accentColor : cs.outlineVariant.withValues(alpha: 0.25),
+            color: isSelected
+                ? accentColor
+                : cs.outlineVariant.withValues(alpha: 0.25),
             width: isSelected ? 1.5 : 1,
           ),
-          boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
+          boxShadow: [
+            BoxShadow(
+              color: cs.shadow.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -770,25 +1362,36 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
-                      color: esPapelera ? cs.onSurface.withValues(alpha: 0.35) : cs.onSurface,
-                      decoration: esPapelera ? TextDecoration.lineThrough : null,
+                      color: esPapelera
+                          ? cs.onSurface.withValues(alpha: 0.35)
+                          : cs.onSurface,
+                      decoration: esPapelera
+                          ? TextDecoration.lineThrough
+                          : null,
                     ),
                   ),
                 ),
                 if (isSelectionMode)
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
-                    width: 18, height: 18,
+                    width: 18,
+                    height: 18,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: isSelected ? accentColor : Colors.transparent,
                       border: Border.all(
-                        color: isSelected ? accentColor : cs.onSurface.withValues(alpha: 0.3),
+                        color: isSelected
+                            ? accentColor
+                            : cs.onSurface.withValues(alpha: 0.3),
                         width: 1.5,
                       ),
                     ),
                     child: isSelected
-                        ? const Icon(Icons.check_rounded, size: 11, color: Colors.white)
+                        ? const Icon(
+                            Icons.check_rounded,
+                            size: 11,
+                            color: Colors.white,
+                          )
                         : null,
                   )
                 else
@@ -798,7 +1401,11 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                       if (nota.esAnclada)
                         Padding(
                           padding: const EdgeInsets.only(right: 2),
-                          child: Icon(Icons.push_pin_rounded, size: 13, color: accentColor.withValues(alpha: 0.7)),
+                          child: Icon(
+                            Icons.push_pin_rounded,
+                            size: 13,
+                            color: accentColor.withValues(alpha: 0.7),
+                          ),
                         ),
                       _buildPopupMenu(nota, estado, cs),
                     ],
@@ -816,7 +1423,9 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.4,
-                    color: cs.onSurface.withValues(alpha: esPapelera ? 0.25 : 0.5),
+                    color: cs.onSurface.withValues(
+                      alpha: esPapelera ? 0.25 : 0.5,
+                    ),
                   ),
                 ),
               ),
@@ -828,33 +1437,93 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
               Wrap(
                 spacing: 4,
                 runSpacing: 2,
-                children: nota.etiquetas.take(2).map((tag) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: cs.onSurface.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    tag,
-                    style: TextStyle(fontSize: 9, color: cs.onSurface.withValues(alpha: 0.6)),
-                  ),
-                )).toList(),
+                children: nota.etiquetas
+                    .take(2)
+                    .map(
+                      (tag) => Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.onSurface.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          tag,
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: cs.onSurface.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
               ),
             ],
-            // Fecha
-            if (nota.fechaCreacion != null) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(Icons.access_time_rounded, size: 11, color: cs.onSurface.withValues(alpha: 0.3)),
-                  const SizedBox(width: 3),
-                  Text(
-                    _formatFecha(nota.fechaCreacion!),
-                    style: TextStyle(fontSize: 10, color: cs.onSurface.withValues(alpha: 0.38)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  Icons.access_time_rounded,
+                  size: 11,
+                  color: cs.onSurface.withValues(alpha: 0.3),
+                ),
+                const SizedBox(width: 3),
+                Text(
+                  _formatFecha(nota.fechaCreacion!),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: cs.onSurface.withValues(alpha: 0.38),
+                  ),
+                ),
+                if (nota.categoriaId != null) ...[
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _parseColor(
+                        nota.categoriaColor,
+                      ).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: _parseColor(
+                          nota.categoriaColor,
+                        ).withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: _parseColor(nota.categoriaColor),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          nota.categoriaNombre ?? 'Categoría',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w500,
+                            color: _parseColor(
+                              nota.categoriaColor,
+                            ).withValues(alpha: 0.9),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
-              ),
-            ],
+              ],
+            ),
           ],
         ),
       ),
@@ -867,7 +1536,11 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   Widget _buildPopupMenu(Nota nota, EstadoNoteType estado, ColorScheme cs) {
     return GestureDetector(
       onTap: () => _mostrarAccionesSheet(nota, estado, cs),
-      child: Icon(Icons.more_vert_rounded, color: cs.onSurface.withValues(alpha: 0.35), size: 20),
+      child: Icon(
+        Icons.more_vert_rounded,
+        color: cs.onSurface.withValues(alpha: 0.35),
+        size: 20,
+      ),
     );
   }
 
@@ -878,21 +1551,99 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     final acciones = <_SheetAccion>[];
     if (estado == EstadoNoteType.ACTIVA) {
       acciones.addAll([
-        _SheetAccion(Icons.edit_rounded,          'Editar',             accentColor,       () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddEditNoteScreenV2(notaToEdit: nota)))),
-        _SheetAccion(Icons.push_pin_outlined,     nota.esAnclada ? 'Desanclar' : 'Anclar', accentColor, () => _cambiarEstado(nota, nota.esAnclada ? 'ACTIVA' : 'ACTIVA', nota.esAnclada ? '"${nota.titulo}" desanclada' : '"${nota.titulo}" anclada')),
-        _SheetAccion(Icons.archive_outlined,      'Archivar',           Colors.orange,     () => _cambiarEstado(nota, 'ARCHIVADA', '"${nota.titulo}" archivada')),
-        _SheetAccion(Icons.delete_outline_rounded,'Mover a papelera',   Colors.redAccent,  () => _cambiarEstado(nota, 'ELIMINADA', '"${nota.titulo}" movida a papelera'), isDestructive: true),
+        _SheetAccion(
+          Icons.edit_rounded,
+          'Editar',
+          accentColor,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AddEditNoteScreenV2(notaToEdit: nota),
+            ),
+          ),
+        ),
+        _SheetAccion(
+          Icons.folder_open_rounded,
+          'Añadir a categoría',
+          accentColor,
+          () => _mostrarSelectorCategoriaParaNota(nota),
+        ),
+        _SheetAccion(
+          Icons.push_pin_outlined,
+          nota.esAnclada ? 'Desanclar' : 'Anclar',
+          accentColor,
+          () => _cambiarEstado(
+            nota,
+            nota.esAnclada ? 'ACTIVA' : 'ACTIVA',
+            nota.esAnclada
+                ? '"${nota.titulo}" desanclada'
+                : '"${nota.titulo}" anclada',
+          ),
+        ),
+        _SheetAccion(
+          Icons.archive_outlined,
+          'Archivar',
+          Colors.orange,
+          () => _cambiarEstado(nota, 'ARCHIVADA', '"${nota.titulo}" archivada'),
+        ),
+        _SheetAccion(
+          Icons.delete_outline_rounded,
+          'Mover a papelera',
+          Colors.redAccent,
+          () => _cambiarEstado(
+            nota,
+            'ELIMINADA',
+            '"${nota.titulo}" movida a papelera',
+          ),
+          isDestructive: true,
+        ),
       ]);
     } else if (estado == EstadoNoteType.ARCHIVADA) {
       acciones.addAll([
-        _SheetAccion(Icons.edit_rounded,          'Editar',             accentColor,       () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddEditNoteScreenV2(notaToEdit: nota)))),
-        _SheetAccion(Icons.unarchive_outlined,    'Restaurar',          Colors.green,      () => _cambiarEstado(nota, 'ACTIVA', '"${nota.titulo}" restaurada')),
-        _SheetAccion(Icons.delete_outline_rounded,'Mover a papelera',   Colors.redAccent,  () => _cambiarEstado(nota, 'ELIMINADA', '"${nota.titulo}" movida a papelera'), isDestructive: true),
+        _SheetAccion(
+          Icons.edit_rounded,
+          'Editar',
+          accentColor,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AddEditNoteScreenV2(notaToEdit: nota),
+            ),
+          ),
+        ),
+        _SheetAccion(
+          Icons.unarchive_outlined,
+          'Restaurar',
+          Colors.green,
+          () => _cambiarEstado(nota, 'ACTIVA', '"${nota.titulo}" restaurada'),
+        ),
+        _SheetAccion(
+          Icons.delete_outline_rounded,
+          'Mover a papelera',
+          Colors.redAccent,
+          () => _cambiarEstado(
+            nota,
+            'ELIMINADA',
+            '"${nota.titulo}" movida a papelera',
+          ),
+          isDestructive: true,
+        ),
       ]);
     } else {
       acciones.addAll([
-        _SheetAccion(Icons.restore_rounded,       'Restaurar',          Colors.green,      () => _cambiarEstado(nota, 'ACTIVA', '"${nota.titulo}" restaurada')),
-        _SheetAccion(Icons.delete_forever_rounded,'Eliminar permanentemente', Colors.red,  () => _eliminarPermanente(nota), isDestructive: true),
+        _SheetAccion(
+          Icons.restore_rounded,
+          'Restaurar',
+          Colors.green,
+          () => _cambiarEstado(nota, 'ACTIVA', '"${nota.titulo}" restaurada'),
+        ),
+        _SheetAccion(
+          Icons.delete_forever_rounded,
+          'Eliminar permanentemente',
+          Colors.red,
+          () => _eliminarPermanente(nota),
+          isDestructive: true,
+        ),
       ]);
     }
 
@@ -911,7 +1662,8 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
               // Drag handle
               const SizedBox(height: 12),
               Container(
-                width: 36, height: 4,
+                width: 36,
+                height: 4,
                 decoration: BoxDecoration(
                   color: cs.onSurface.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(2),
@@ -925,12 +1677,17 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                 child: Row(
                   children: [
                     Container(
-                      width: 40, height: 40,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: accentColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(Icons.note_rounded, color: accentColor, size: 20),
+                      child: Icon(
+                        Icons.note_rounded,
+                        color: accentColor,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -941,14 +1698,21 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                             nota.titulo,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: cs.onSurface),
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: cs.onSurface,
+                            ),
                           ),
                           if (nota.contenido.isNotEmpty)
                             Text(
                               nota.contenido,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.45)),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: cs.onSurface.withValues(alpha: 0.45),
+                              ),
                             ),
                         ],
                       ),
@@ -958,38 +1722,178 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
               ),
 
               const SizedBox(height: 16),
-              Divider(color: cs.outlineVariant.withValues(alpha: 0.25), height: 1, indent: 24, endIndent: 24),
+              Divider(
+                color: cs.outlineVariant.withValues(alpha: 0.25),
+                height: 1,
+                indent: 24,
+                endIndent: 24,
+              ),
               const SizedBox(height: 8),
 
               // Acciones
-              ...acciones.map((a) => Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () { Navigator.pop(sheetCtx); a.onTap(); },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
-                    child: Row(
-                      children: [
-                        Icon(a.icon, size: 20, color: a.isDestructive ? Colors.redAccent : cs.onSurface.withValues(alpha: 0.6)),
-                        const SizedBox(width: 16),
-                        Text(
-                          a.label,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                            color: a.isDestructive ? Colors.redAccent : cs.onSurface,
+              ...acciones.map(
+                (a) => Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      a.onTap();
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 13,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            a.icon,
+                            size: 20,
+                            color: a.isDestructive
+                                ? Colors.redAccent
+                                : cs.onSurface.withValues(alpha: 0.6),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 16),
+                          Text(
+                            a.label,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: a.isDestructive
+                                  ? Colors.redAccent
+                                  : cs.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              )),
+              ),
             ],
           ),
         );
       },
     );
+  }
+
+  void _mostrarSelectorCategoriaParaNota(Nota nota) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        final cs = Theme.of(context).colorScheme;
+        final accentColor = ref.read(settingsProvider).accentColor;
+
+        return Consumer(
+          builder: (context, ref, child) {
+            final categoriesAsync = ref.watch(categoriasNotifierProvider);
+
+            return Container(
+              padding: const EdgeInsets.only(top: 20, bottom: 20),
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.5,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      'Cambiar Categoría',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: categoriesAsync.when(
+                      data: (categorias) {
+                        return ListView.builder(
+                          itemCount: categorias.length + 1,
+                          itemBuilder: (context, index) {
+                            if (index == 0) {
+                              return ListTile(
+                                leading: Icon(Icons.close, color: cs.error),
+                                title: const Text('Sin categoría'),
+                                selected: nota.categoriaId == null,
+                                selectedTileColor: accentColor.withValues(
+                                  alpha: 0.1,
+                                ),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _actualizarCategoriaNota(nota, null);
+                                },
+                              );
+                            }
+
+                            final categoria = categorias[index - 1];
+                            final isSelected = nota.categoriaId == categoria.id;
+                            final color = _parseColor(categoria.colorHex);
+
+                            return ListTile(
+                              leading: Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              title: Text(categoria.nombre),
+                              selected: isSelected,
+                              selectedTileColor: accentColor.withValues(
+                                alpha: 0.1,
+                              ),
+                              onTap: () {
+                                Navigator.pop(context);
+                                _actualizarCategoriaNota(nota, categoria.id);
+                              },
+                            );
+                          },
+                        );
+                      },
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
+                      error: (err, stack) => Center(child: Text('Error: $err')),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _actualizarCategoriaNota(Nota nota, int? categoriaId) async {
+    try {
+      final nuevaNota = Nota(
+        id: nota.id,
+        titulo: nota.titulo,
+        contenido: nota.contenido,
+        fechaCreacion: nota.fechaCreacion,
+        estado: nota.estado,
+        color: nota.color,
+        etiquetas: nota.etiquetas,
+        categoriaId: categoriaId,
+      );
+      await ref.read(notesProvider.notifier).updateNota(nuevaNota);
+      if (mounted) AppSnackBar.exito(context, 'Categoría actualizada');
+    } catch (e) {
+      if (mounted) AppSnackBar.errorDesdeExcepcion(context, e);
+    }
   }
 
   // ══════════════════════════════════════════════════════════
@@ -1022,14 +1926,24 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       ),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLowest,
-        border: Border(top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.2))),
-        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, -4))],
+        border: Border(
+          top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.2)),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.1),
+            blurRadius: 20,
+            offset: const Offset(0, -4),
+          ),
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _selectionIcon(
-            icon: todasAncladas ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+            icon: todasAncladas
+                ? Icons.push_pin_rounded
+                : Icons.push_pin_outlined,
             tooltip: todasAncladas ? 'Desanclar' : 'Anclar',
             color: accentColor,
             cs: cs,
@@ -1037,9 +1951,17 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
               if (_selectedNoteIds.isEmpty) return;
               final nuevoEstadoAnclado = !todasAncladas;
               try {
-                await ref.read(notesProvider.notifier).anclarNotasMasivo(_selectedNoteIds.toList(), nuevoEstadoAnclado);
+                await ref
+                    .read(notesProvider.notifier)
+                    .anclarNotasMasivo(
+                      _selectedNoteIds.toList(),
+                      nuevoEstadoAnclado,
+                    );
                 if (mounted) {
-                  AppSnackBar.exito(context, nuevoEstadoAnclado ? 'Notas ancladas' : 'Notas desancladas');
+                  AppSnackBar.exito(
+                    context,
+                    nuevoEstadoAnclado ? 'Notas ancladas' : 'Notas desancladas',
+                  );
                   ref.read(selectionModeProvider.notifier).toggle(false);
                   setState(() => _selectedNoteIds.clear());
                 }
@@ -1089,7 +2011,14 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             children: [
               Icon(icon, color: color, size: 24),
               const SizedBox(height: 4),
-              Text(tooltip, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500)),
+              Text(
+                tooltip,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: color,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ],
           ),
         ),
@@ -1127,7 +2056,9 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
         for (final id in ids) {
           _pendientes[id]?.timer.cancel();
           _pendientes.remove(id);
-          ref.read(notesProvider.notifier).cambiarEstadoLocal(id, estadoAnterior);
+          ref
+              .read(notesProvider.notifier)
+              .cambiarEstadoLocal(id, estadoAnterior);
         }
       },
     );
@@ -1144,7 +2075,9 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       } catch (e) {
         if (mounted) {
           for (final id in ids) {
-            ref.read(notesProvider.notifier).cambiarEstadoLocal(id, estadoAnterior);
+            ref
+                .read(notesProvider.notifier)
+                .cambiarEstadoLocal(id, estadoAnterior);
           }
           AppSnackBar.error(context, 'Error al archivar');
         }
@@ -1153,7 +2086,11 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
 
     // Registrar en _pendientes para que dispose() los confirme si el usuario sale
     for (final id in ids) {
-      _pendientes[id] = (nuevoEstado: 'ARCHIVADA', estadoAnterior: estadoAnterior, timer: timer);
+      _pendientes[id] = (
+        nuevoEstado: 'ARCHIVADA',
+        estadoAnterior: estadoAnterior,
+        timer: timer,
+      );
     }
   }
 
@@ -1169,17 +2106,33 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       final confirmar = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Eliminar permanentemente', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Text('¿Eliminar $cantidad nota${cantidad == 1 ? '' : 's'} para siempre?\nEsta acción no se puede deshacer.'),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            'Eliminar permanentemente',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            '¿Eliminar $cantidad nota${cantidad == 1 ? '' : 's'} para siempre?\nEsta acción no se puede deshacer.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(color: Colors.grey),
+              ),
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Eliminar', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+              child: const Text(
+                'Eliminar',
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ],
         ),
@@ -1192,7 +2145,10 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
         if (mounted) {
           ref.read(selectionModeProvider.notifier).toggle(false);
           setState(() => _selectedNoteIds.clear());
-          AppSnackBar.exito(context, '$cantidad nota${cantidad == 1 ? '' : 's'} eliminada${cantidad == 1 ? '' : 's'} permanentemente');
+          AppSnackBar.exito(
+            context,
+            '$cantidad nota${cantidad == 1 ? '' : 's'} eliminada${cantidad == 1 ? '' : 's'} permanentemente',
+          );
         }
       } catch (e) {
         if (mounted) AppSnackBar.errorDesdeExcepcion(context, e);
@@ -1219,7 +2175,9 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
         for (final id in ids) {
           _pendientes[id]?.timer.cancel();
           _pendientes.remove(id);
-          ref.read(notesProvider.notifier).cambiarEstadoLocal(id, estadoAnterior);
+          ref
+              .read(notesProvider.notifier)
+              .cambiarEstadoLocal(id, estadoAnterior);
         }
       },
     );
@@ -1235,7 +2193,9 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       } catch (e) {
         if (mounted) {
           for (final id in ids) {
-            ref.read(notesProvider.notifier).cambiarEstadoLocal(id, estadoAnterior);
+            ref
+                .read(notesProvider.notifier)
+                .cambiarEstadoLocal(id, estadoAnterior);
           }
           AppSnackBar.error(context, 'Error al mover a papelera');
         }
@@ -1243,8 +2203,26 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     });
 
     for (final id in ids) {
-      _pendientes[id] = (nuevoEstado: 'ELIMINADA', estadoAnterior: estadoAnterior, timer: timer);
+      _pendientes[id] = (
+        nuevoEstado: 'ELIMINADA',
+        estadoAnterior: estadoAnterior,
+        timer: timer,
+      );
     }
+  }
+}
+
+// Helper para parsear colores hex
+Color _parseColor(String? colorHex) {
+  if (colorHex == null || colorHex.isEmpty) {
+    return Colors.grey;
+  }
+  try {
+    return Color(
+      int.parse(colorHex.replaceFirst('#', ''), radix: 16) + 0xFF000000,
+    );
+  } catch (e) {
+    return Colors.grey;
   }
 }
 
@@ -1255,5 +2233,11 @@ class _SheetAccion {
   final VoidCallback onTap;
   final bool isDestructive;
 
-  const _SheetAccion(this.icon, this.label, this.color, this.onTap, {this.isDestructive = false});
+  const _SheetAccion(
+    this.icon,
+    this.label,
+    this.color,
+    this.onTap, {
+    this.isDestructive = false,
+  });
 }
